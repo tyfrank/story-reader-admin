@@ -151,7 +151,8 @@ export default function BooksPage() {
         }
       }
       
-      // First create the book without chapters (to handle large content)
+      // Try to create book WITH chapters first (like the old admin)
+      // Only fallback to separate upload if it fails
       const bookData = {
         title: uploadForm.title,
         authorName: uploadForm.author,
@@ -161,10 +162,16 @@ export default function BooksPage() {
         tags: uploadForm.tags.split(',').map(tag => tag.trim()).filter(Boolean),
         coverUrl: coverUrl || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=300&h=450&fit=crop',
         status: 'PUBLISHED',
-        chapters: [] // Start with empty chapters
+        // Include first 10 chapters with the book creation
+        chapters: uploadForm.chapters.slice(0, 10).map((ch, idx) => ({
+          title: ch.title || `Chapter ${idx + 1}`,
+          content: ch.content || '',
+          chapterNumber: idx + 1,
+          isPremium: false,
+          coinCost: 0
+        }))
       }
       
-      // Create the book first
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app'}/api/admin/books`,
         {
@@ -181,51 +188,113 @@ export default function BooksPage() {
         const createdBook = await response.json()
         const bookId = createdBook.data?.id || createdBook.id
         
-        if (bookId && uploadForm.chapters.length > 0) {
-          // Upload chapters one by one to avoid size limits
-          let successCount = 0
-          for (let i = 0; i < uploadForm.chapters.length; i++) {
-            const chapter = uploadForm.chapters[i]
-            const chapterData = {
-              title: chapter.title || `Chapter ${i + 1}`,
-              content: chapter.content || '',
-              chapterNumber: i + 1,
-              isPremium: false,
-              coinCost: 0
-            }
+        // If there are more than 10 chapters, upload the rest in batches
+        if (bookId && uploadForm.chapters.length > 10) {
+          const remainingChapters = uploadForm.chapters.slice(10)
+          const batchSize = 20 // Upload 20 chapters at a time
+          
+          for (let i = 0; i < remainingChapters.length; i += batchSize) {
+            const batch = remainingChapters.slice(i, Math.min(i + batchSize, remainingChapters.length))
             
-            try {
-              const chapterResponse = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app'}/api/admin/books/${bookId}/chapters`,
-                {
-                  method: 'POST',
-                  headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                  },
-                  body: JSON.stringify(chapterData)
-                }
-              )
-              
-              if (chapterResponse.ok) {
-                successCount++
-              } else {
-                console.error(`Failed to upload chapter ${i + 1}`)
+            // Try to upload as a batch first
+            for (let j = 0; j < batch.length; j++) {
+              const chapter = batch[j]
+              const chapterData = {
+                title: chapter.title || `Chapter ${10 + i + j + 1}`,
+                content: chapter.content || '',
+                chapterNumber: 10 + i + j + 1,
+                isPremium: false,
+                coinCost: 0
               }
-            } catch (err) {
-              console.error(`Error uploading chapter ${i + 1}:`, err)
+              
+              try {
+                await fetch(
+                  `${process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app'}/api/admin/books/${bookId}/chapters`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${token}`,
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(chapterData)
+                  }
+                )
+              } catch (err) {
+                console.error(`Error uploading chapter ${10 + i + j + 1}:`, err)
+              }
             }
           }
+        }
+        
+        await fetchBooks()
+        setShowUploadModal(false)
+        resetUploadForm()
+        alert(`Book "${uploadForm.title}" uploaded successfully with ${uploadForm.chapters.length} chapters!`)
+      } else if (response.status === 413) {
+        // If payload too large, try without chapters
+        console.log('Payload too large, creating book without chapters first')
+        
+        bookData.chapters = []
+        const bookOnlyResponse = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app'}/api/admin/books`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(bookData)
+          }
+        )
+        
+        if (bookOnlyResponse.ok) {
+          const createdBook = await bookOnlyResponse.json()
+          const bookId = createdBook.data?.id || createdBook.id
           
-          await fetchBooks()
-          setShowUploadModal(false)
-          resetUploadForm()
-          alert(`Book uploaded successfully! ${successCount} of ${uploadForm.chapters.length} chapters uploaded.`)
+          if (bookId && uploadForm.chapters.length > 0) {
+            // Upload ALL chapters in smaller batches
+            const batchSize = 10 // Smaller batch size for large chapters
+            
+            for (let i = 0; i < uploadForm.chapters.length; i += batchSize) {
+              const batch = uploadForm.chapters.slice(i, Math.min(i + batchSize, uploadForm.chapters.length))
+              
+              for (let j = 0; j < batch.length; j++) {
+                const chapter = batch[j]
+                const chapterData = {
+                  title: chapter.title || `Chapter ${i + j + 1}`,
+                  content: chapter.content || '',
+                  chapterNumber: i + j + 1,
+                  isPremium: false,
+                  coinCost: 0
+                }
+                
+                try {
+                  await fetch(
+                    `${process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app'}/api/admin/books/${bookId}/chapters`,
+                    {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify(chapterData)
+                    }
+                  )
+                } catch (err) {
+                  console.error(`Error uploading chapter ${i + j + 1}:`, err)
+                }
+              }
+            }
+            
+            await fetchBooks()
+            setShowUploadModal(false)
+            resetUploadForm()
+            alert(`Book "${uploadForm.title}" uploaded successfully with ${uploadForm.chapters.length} chapters!`)
+          }
         } else {
-          await fetchBooks()
-          setShowUploadModal(false)
-          resetUploadForm()
-          alert('Book created successfully!')
+          const errorText = await bookOnlyResponse.text()
+          console.error('Upload error:', errorText)
+          alert(`Failed to upload book: ${errorText}`)
         }
       } else {
         const errorText = await response.text()
