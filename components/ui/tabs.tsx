@@ -2,6 +2,8 @@
 
 import * as React from 'react'
 
+const TabsContext = React.createContext<{ value: string; onValueChange: (value: string) => void } | null>(null)
+
 interface TabsProps {
   value: string
   onValueChange: (value: string) => void
@@ -11,9 +13,11 @@ interface TabsProps {
 
 export function Tabs({ value, onValueChange, className = '', children }: TabsProps) {
   return (
-    <div className={className} data-value={value} data-onchange={onValueChange}>
-      {children}
-    </div>
+    <TabsContext.Provider value={{ value, onValueChange }}>
+      <div className={className}>
+        {children}
+      </div>
+    </TabsContext.Provider>
   )
 }
 
@@ -61,8 +65,6 @@ export function TabsContent({ value, children, className = '' }: TabsContentProp
   
   return <div className={className}>{children}</div>
 }
-
-const TabsContext = React.createContext<{ value: string; onValueChange: (value: string) => void } | null>(null)
 
 export function TabsProvider({ value, onValueChange, children }: { value: string; onValueChange: (value: string) => void; children: React.ReactNode }) {
   return (
