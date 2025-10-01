@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { TabsProvider, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AnalyticsDashboard } from '@/components/analytics/AnalyticsDashboard'
 import { BookUpload } from '@/components/books/BookUpload'
 import { UserFeedback } from '@/components/feedback/UserFeedback'
@@ -23,9 +23,8 @@ export default function AdminDashboard() {
         <Header />
         
         <main className="flex-1 overflow-y-auto p-6">
-          <TabsProvider value={activeTab} onValueChange={setActiveTab}>
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-              <TabsList className="grid w-full grid-cols-7 lg:w-auto">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+            <TabsList className="grid w-full grid-cols-7 lg:w-auto">
                 <TabsTrigger value="analytics">Analytics</TabsTrigger>
                 <TabsTrigger value="books">Books</TabsTrigger>
                 <TabsTrigger value="users">Users</TabsTrigger>
@@ -70,7 +69,6 @@ export default function AdminDashboard() {
                 <ContentModeration />
               </TabsContent>
             </Tabs>
-          </TabsProvider>
         </main>
       </div>
     </div>
