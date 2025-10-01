@@ -47,9 +47,12 @@ export default function BooksPage() {
     title: '',
     author: '',
     description: '',
+    genre: 'WEREWOLF',
+    tags: '',
     maturityRating: 'TEEN',
     coverImage: '',
-    chapters: [] as { title: string; content: string }[]
+    chapters: [] as { title: string; content: string }[],
+    bulkChapters: ''
   })
 
   useEffect(() => {
@@ -85,7 +88,8 @@ export default function BooksPage() {
         authorName: uploadForm.author,
         description: uploadForm.description,
         maturityRating: uploadForm.maturityRating,
-        genre: 'ROMANCE',
+        genre: uploadForm.genre,
+        tags: uploadForm.tags.split(',').map(tag => tag.trim()).filter(Boolean),
         coverUrl: uploadForm.coverImage || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=300&h=450&fit=crop',
         status: 'PUBLISHED',
         chapters: uploadForm.chapters.map((ch, idx) => ({
@@ -176,10 +180,64 @@ export default function BooksPage() {
       title: '',
       author: '',
       description: '',
+      genre: 'WEREWOLF',
+      tags: '',
       maturityRating: 'TEEN',
       coverImage: '',
-      chapters: []
+      chapters: [],
+      bulkChapters: ''
     })
+  }
+
+  const parseChapters = (text: string) => {
+    // Parse chapters from bulk text
+    // Format expected: Chapter 1: Title\n\nContent...\n\n---\n\nChapter 2: Title\n\nContent...
+    const chapterSeparator = /---+/g
+    const chapterBlocks = text.split(chapterSeparator)
+    
+    const chapters = chapterBlocks.map((block, index) => {
+      const lines = block.trim().split('\n')
+      let title = `Chapter ${index + 1}`
+      let content = block.trim()
+      
+      // Try to extract chapter title from first line
+      if (lines.length > 0) {
+        const firstLine = lines[0].trim()
+        // Check for patterns like "Chapter 1: Title" or "Chapter 1 - Title" or just "Title"
+        const chapterMatch = firstLine.match(/^(?:Chapter\s+\d+[:\-\s]+)?(.+)$/i)
+        if (chapterMatch && chapterMatch[1]) {
+          title = chapterMatch[1].trim() || title
+          // Remove title line from content
+          content = lines.slice(1).join('\n').trim()
+        }
+      }
+      
+      return { title, content }
+    }).filter(ch => ch.content) // Filter out empty chapters
+    
+    return chapters
+  }
+
+  const handleBulkChapterParse = () => {
+    if (!uploadForm.bulkChapters.trim()) {
+      alert('Please enter chapter content to parse')
+      return
+    }
+    
+    const parsedChapters = parseChapters(uploadForm.bulkChapters)
+    
+    if (parsedChapters.length === 0) {
+      alert('No chapters could be parsed. Please check the format.')
+      return
+    }
+    
+    setUploadForm(prev => ({
+      ...prev,
+      chapters: parsedChapters,
+      bulkChapters: '' // Clear bulk input after parsing
+    }))
+    
+    alert(`Successfully parsed ${parsedChapters.length} chapters!`)
   }
 
   const addChapter = () => {
@@ -467,6 +525,18 @@ export default function BooksPage() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
+                    <label className="block text-sm font-medium mb-1">Genre</label>
+                    <select
+                      value={uploadForm.genre}
+                      onChange={(e) => setUploadForm(prev => ({ ...prev, genre: e.target.value }))}
+                      className="input-field"
+                    >
+                      <option value="WEREWOLF">Werewolf</option>
+                      <option value="VAMPIRE">Vampire</option>
+                      <option value="BILLIONAIRE_CEO">Billionaire CEO</option>
+                    </select>
+                  </div>
+                  <div>
                     <label className="block text-sm font-medium mb-1">Maturity Rating</label>
                     <select
                       value={uploadForm.maturityRating}
@@ -479,27 +549,64 @@ export default function BooksPage() {
                       <option value="ADULT">Adult</option>
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Cover Image URL</label>
-                    <input
-                      type="text"
-                      value={uploadForm.coverImage}
-                      onChange={(e) => setUploadForm(prev => ({ ...prev, coverImage: e.target.value }))}
-                      className="input-field"
-                      placeholder="https://..."
-                    />
-                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Tags (comma separated)</label>
+                  <input
+                    type="text"
+                    value={uploadForm.tags}
+                    onChange={(e) => setUploadForm(prev => ({ ...prev, tags: e.target.value }))}
+                    className="input-field"
+                    placeholder="alpha, romance, supernatural, etc..."
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Cover Image URL</label>
+                  <input
+                    type="text"
+                    value={uploadForm.coverImage}
+                    onChange={(e) => setUploadForm(prev => ({ ...prev, coverImage: e.target.value }))}
+                    className="input-field"
+                    placeholder="https://..."
+                  />
+                </div>
+
+                {/* Bulk Chapter Upload Section */}
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 bg-gray-50">
+                  <h3 className="font-medium mb-2">Bulk Chapter Upload</h3>
+                  <p className="text-xs text-gray-600 mb-3">
+                    Paste all chapters below. Separate chapters with three dashes (---).
+                    Format: Chapter 1: Title\n\nContent...\n\n---\n\nChapter 2: Title\n\nContent...
+                  </p>
+                  <textarea
+                    value={uploadForm.bulkChapters}
+                    onChange={(e) => setUploadForm(prev => ({ ...prev, bulkChapters: e.target.value }))}
+                    placeholder="Paste all chapters here..."
+                    className="input-field font-mono text-sm"
+                    rows={8}
+                  />
+                  <button
+                    onClick={handleBulkChapterParse}
+                    className="mt-3 w-full btn-primary"
+                    type="button"
+                  >
+                    Parse Chapters
+                  </button>
                 </div>
 
                 <div>
                   <div className="flex justify-between items-center mb-2">
-                    <label className="block text-sm font-medium">Chapters</label>
+                    <label className="block text-sm font-medium">
+                      Chapters {uploadForm.chapters.length > 0 && `(${uploadForm.chapters.length})`}
+                    </label>
                     <button
                       onClick={addChapter}
                       className="text-pink-600 hover:text-pink-700 text-sm flex items-center gap-1"
                     >
                       <Plus size={16} />
-                      Add Chapter
+                      Add Manual Chapter
                     </button>
                   </div>
                   
