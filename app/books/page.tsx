@@ -62,17 +62,37 @@ export default function BooksPage() {
   const fetchBooks = async () => {
     try {
       const token = localStorage.getItem('adminToken')
+      
+      if (!token) {
+        console.log('No admin token found, redirecting to login')
+        window.location.href = '/login'
+        return
+      }
+      
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app'}/api/admin/books`,
         { headers: { 'Authorization': `Bearer ${token}` } }
       )
       
+      if (response.status === 401) {
+        console.log('Token expired or invalid, redirecting to login')
+        localStorage.removeItem('adminToken')
+        window.location.href = '/login'
+        return
+      }
+      
       if (response.ok) {
         const data = await response.json()
         setBooks(data.data || [])
+      } else {
+        console.error('Failed to fetch books:', response.status)
+        // Even if no books, don't error out - just show empty list
+        setBooks([])
       }
     } catch (error) {
       console.error('Failed to fetch books:', error)
+      // Don't fail completely, just show empty list
+      setBooks([])
     } finally {
       setLoading(false)
     }
@@ -266,7 +286,7 @@ export default function BooksPage() {
   // Filter books
   const filteredBooks = books.filter(book => {
     const matchesSearch = book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         book.author.toLowerCase().includes(searchTerm.toLowerCase())
+                         (book.author?.toLowerCase() || '').includes(searchTerm.toLowerCase())
     const matchesFilter = filterType === 'ALL' || 
                          (filterType === 'ADMIN' && book.uploadedBy === 'ADMIN') ||
                          (filterType === 'AUTHOR' && book.uploadedBy === 'AUTHOR') ||
