@@ -145,15 +145,13 @@ export default function BooksPage() {
       // Handle cover image upload if file is selected
       let coverUrl = uploadForm.coverImage
       if (uploadForm.coverImageFile) {
-        // Convert to base64 for simplicity
-        const reader = new FileReader()
-        coverUrl = await new Promise((resolve) => {
-          reader.onloadend = () => resolve(reader.result as string)
-          reader.readAsDataURL(uploadForm.coverImageFile!)
-        })
+        // For now, just use the URL field - base64 images can be too large
+        if (!uploadForm.coverImage || uploadForm.coverImage.startsWith('blob:')) {
+          coverUrl = 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=300&h=450&fit=crop'
+        }
       }
       
-      // Format the book data for backend API
+      // First create the book without chapters (to handle large content)
       const bookData = {
         title: uploadForm.title,
         authorName: uploadForm.author,
@@ -163,15 +161,10 @@ export default function BooksPage() {
         tags: uploadForm.tags.split(',').map(tag => tag.trim()).filter(Boolean),
         coverUrl: coverUrl || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=300&h=450&fit=crop',
         status: 'PUBLISHED',
-        chapters: uploadForm.chapters.map((ch, idx) => ({
-          title: ch.title || `Chapter ${idx + 1}`,
-          content: ch.content || '',
-          chapterNumber: idx + 1,
-          isPremium: false,
-          coinCost: 0
-        }))
+        chapters: [] // Start with empty chapters
       }
       
+      // Create the book first
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app'}/api/admin/books`,
         {
@@ -185,10 +178,55 @@ export default function BooksPage() {
       )
 
       if (response.ok) {
-        await fetchBooks()
-        setShowUploadModal(false)
-        resetUploadForm()
-        alert('Book uploaded successfully with chapters!')
+        const createdBook = await response.json()
+        const bookId = createdBook.data?.id || createdBook.id
+        
+        if (bookId && uploadForm.chapters.length > 0) {
+          // Upload chapters one by one to avoid size limits
+          let successCount = 0
+          for (let i = 0; i < uploadForm.chapters.length; i++) {
+            const chapter = uploadForm.chapters[i]
+            const chapterData = {
+              title: chapter.title || `Chapter ${i + 1}`,
+              content: chapter.content || '',
+              chapterNumber: i + 1,
+              isPremium: false,
+              coinCost: 0
+            }
+            
+            try {
+              const chapterResponse = await fetch(
+                `${process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app'}/api/admin/books/${bookId}/chapters`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify(chapterData)
+                }
+              )
+              
+              if (chapterResponse.ok) {
+                successCount++
+              } else {
+                console.error(`Failed to upload chapter ${i + 1}`)
+              }
+            } catch (err) {
+              console.error(`Error uploading chapter ${i + 1}:`, err)
+            }
+          }
+          
+          await fetchBooks()
+          setShowUploadModal(false)
+          resetUploadForm()
+          alert(`Book uploaded successfully! ${successCount} of ${uploadForm.chapters.length} chapters uploaded.`)
+        } else {
+          await fetchBooks()
+          setShowUploadModal(false)
+          resetUploadForm()
+          alert('Book created successfully!')
+        }
       } else {
         const errorText = await response.text()
         console.error('Upload error:', errorText)
