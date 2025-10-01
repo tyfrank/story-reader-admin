@@ -86,7 +86,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="input-field pl-10"
-                placeholder="admin@romanceme.com"
+                placeholder="admin@romanceme.app"
                 required
               />
             </div>
@@ -129,7 +129,7 @@ export default function LoginPage() {
             Login credentials:
           </p>
           <p className="text-xs text-gray-500 mt-1">
-            Email: admin@romanceme.com<br/>
+            Email: admin@romanceme.app<br/>
             Password: admin123
           </p>
         </div>
