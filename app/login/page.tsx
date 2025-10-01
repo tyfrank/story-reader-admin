@@ -17,7 +17,8 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const response = await fetch(
+      // Try admin-specific endpoint first
+      let response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app'}/api/auth/admin-login`,
         {
           method: 'POST',
@@ -26,9 +27,28 @@ export default function LoginPage() {
         }
       )
 
+      // Fallback to regular login if admin endpoint not found
+      if (response.status === 404) {
+        response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app'}/api/auth/login`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+          }
+        )
+      }
+
       if (response.ok) {
         const data = await response.json()
-        localStorage.setItem('adminToken', data.token)
+        
+        // Check if user is admin
+        if (data.user && data.user.role !== 'ADMIN') {
+          setError('Access denied. Admin privileges required.')
+          return
+        }
+        
+        localStorage.setItem('adminToken', data.token || data.accessToken)
         localStorage.setItem('adminUser', JSON.stringify(data.user))
         router.push('/dashboard')
       } else {
