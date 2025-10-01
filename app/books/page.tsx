@@ -144,13 +144,14 @@ export default function BooksPage() {
       // Save autocomplete data
       saveAutocompleteData(uploadForm.author, uploadForm.tags)
       
-      // Handle cover image upload if file is selected
+      // Handle cover image - if it's a blob URL, don't use it (that's just for preview)
       let coverUrl = uploadForm.coverImage
-      if (uploadForm.coverImageFile) {
-        // For now, just use the URL field - base64 images can be too large
-        if (!uploadForm.coverImage || uploadForm.coverImage.startsWith('blob:')) {
-          coverUrl = 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=300&h=450&fit=crop'
-        }
+      if (coverUrl && coverUrl.startsWith('blob:')) {
+        // If there's a file upload, we can't handle it directly, so use default
+        // In a real implementation, you'd upload to a CDN first
+        coverUrl = editingBook?.coverUrl || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=300&h=450&fit=crop'
+      } else if (!coverUrl) {
+        coverUrl = editingBook?.coverUrl || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=300&h=450&fit=crop'
       }
       
       // If editing, update the existing book
@@ -492,7 +493,7 @@ export default function BooksPage() {
     const file = e.target.files?.[0]
     if (file) {
       setUploadForm(prev => ({ ...prev, coverImageFile: file }))
-      // Create preview URL
+      // Create preview URL for display only
       const previewUrl = URL.createObjectURL(file)
       setUploadForm(prev => ({ ...prev, coverImage: previewUrl }))
     }
@@ -910,14 +911,20 @@ export default function BooksPage() {
 
                 <div>
                   <label className="block text-sm font-medium mb-1">Cover Image</label>
+                  {uploadForm.coverImage && uploadForm.coverImage.startsWith('blob:') && (
+                    <p className="text-xs text-orange-600 mb-1">
+                      ⚠️ File uploads not supported yet. Please use a direct image URL instead.
+                    </p>
+                  )}
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      value={uploadForm.coverImage}
+                      value={uploadForm.coverImage && !uploadForm.coverImage.startsWith('blob:') ? uploadForm.coverImage : ''}
                       onChange={(e) => setUploadForm(prev => ({ ...prev, coverImage: e.target.value, coverImageFile: null }))}
                       className="input-field flex-1"
-                      placeholder="Enter URL or upload file"
+                      placeholder="Enter image URL (e.g., https://...)"
                     />
+                    {/* File upload disabled for now - only URLs work
                     <input
                       ref={fileInputRef}
                       type="file"
@@ -933,8 +940,9 @@ export default function BooksPage() {
                       <Image size={18} />
                       Upload
                     </button>
+                    */}
                   </div>
-                  {uploadForm.coverImage && (
+                  {uploadForm.coverImage && !uploadForm.coverImage.startsWith('blob:') && (
                     <div className="mt-2">
                       <img src={uploadForm.coverImage} alt="Cover preview" className="h-32 rounded" />
                     </div>
