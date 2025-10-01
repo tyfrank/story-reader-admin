@@ -264,9 +264,9 @@ export default function BooksPage() {
   }
 
   const parseChapters = (text: string) => {
-    // Parse chapters separated by double blank lines
-    // Split by double newlines (blank line between chapters)
-    const chapterBlocks = text.split(/\n\s*\n\s*\n/)
+    // Parse chapters separated by single blank line
+    // Split by double newlines (one blank line between chapters)
+    const chapterBlocks = text.split(/\n\s*\n/)
     
     const chapters = chapterBlocks.map((block, index) => {
       const trimmedBlock = block.trim()
@@ -733,8 +733,8 @@ export default function BooksPage() {
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 bg-gray-50">
                   <h3 className="font-medium mb-2">Bulk Chapter Upload</h3>
                   <p className="text-xs text-gray-600 mb-3">
-                    Paste all chapters below. Separate chapters with a blank line (double enter).
-                    Format: Chapter 1: Title\n\nContent...\n\n\n\nChapter 2: Title\n\nContent...
+                    Paste all chapters below. Separate each chapter with one blank line.
+                    Format: Chapter 1: Title<br/>Content...<br/><br/>Chapter 2: Title<br/>Content...
                   </p>
                   <textarea
                     value={uploadForm.bulkChapters}
