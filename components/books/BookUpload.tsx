@@ -1,12 +1,17 @@
 'use client'
 
-import { useState } from 'react'
-import { Upload } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Upload, LogIn, LogOut } from 'lucide-react'
 import axios from 'axios'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app'
 
 export function BookUpload() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loginError, setLoginError] = useState('')
+  
   const [formData, setFormData] = useState({
     title: '',
     authorName: '',
@@ -20,6 +25,39 @@ export function BookUpload() {
   const [uploading, setUploading] = useState(false)
   const [message, setMessage] = useState('')
   const [chapterText, setChapterText] = useState('')
+
+  useEffect(() => {
+    const token = localStorage.getItem('adminToken')
+    if (token) {
+      setIsLoggedIn(true)
+    }
+  }, [])
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoginError('')
+    
+    try {
+      const response = await axios.post(`${API_URL}/api/auth/login`, {
+        email,
+        password
+      })
+      
+      if (response.data.token) {
+        localStorage.setItem('adminToken', response.data.token)
+        setIsLoggedIn(true)
+        setEmail('')
+        setPassword('')
+      }
+    } catch (error: any) {
+      setLoginError(error.response?.data?.message || 'Login failed. Please check your credentials.')
+    }
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem('adminToken')
+    setIsLoggedIn(false)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -80,10 +118,74 @@ export function BookUpload() {
     }
   }
 
+  if (!isLoggedIn) {
+    return (
+      <div className="max-w-md mx-auto p-6">
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h2 className="text-2xl font-bold mb-6">Admin Login</h2>
+          
+          {loginError && (
+            <div className="p-4 mb-4 rounded bg-red-100 text-red-700">
+              {loginError}
+            </div>
+          )}
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="admin@romanceme.com"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="admin123"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 flex items-center justify-center"
+            >
+              <LogIn className="mr-2" size={20} />
+              Login
+            </button>
+          </form>
+
+          <div className="mt-4 p-3 bg-gray-100 rounded text-sm text-gray-600">
+            <p>Default credentials:</p>
+            <p className="font-mono">admin@romanceme.com / admin123</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-2xl font-bold mb-6">Upload New Book</h2>
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold">Upload New Book</h2>
+          <button
+            onClick={handleLogout}
+            className="text-gray-600 hover:text-gray-800 flex items-center"
+          >
+            <LogOut className="mr-1" size={20} />
+            Logout
+          </button>
+        </div>
         
         {message && (
           <div className={`p-4 mb-4 rounded ${message.includes('Error') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
