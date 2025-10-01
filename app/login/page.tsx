@@ -130,7 +130,7 @@ export default function LoginPage() {
           </p>
           <p className="text-xs text-gray-500 mt-1">
             Email: admin@romanceme.app<br/>
-            Password: admin123
+            Password: RomanceAdmin2024
           </p>
         </div>
       </div>
