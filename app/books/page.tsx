@@ -930,6 +930,156 @@ export default function BooksPage() {
             </div>
           </div>
         )}
+
+        {/* Edit Book Modal */}
+        {editingBook && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-2xl font-bold">Edit Book: {editingBook.title}</h2>
+                  <button
+                    onClick={() => setEditingBook(null)}
+                    className="p-2 hover:bg-gray-100 rounded"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+              
+              <div className="p-6 space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h3 className="font-medium mb-2">Book Information</h3>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>Book ID: {editingBook.id}</div>
+                    <div>Current Chapters: {editingBook._count?.chapters || editingBook.chapters?.length || 0}</div>
+                    <div>Author: {editingBook.authorName || editingBook.author}</div>
+                    <div>Status: {editingBook.isPublished ? 'Published' : 'Draft'}</div>
+                  </div>
+                </div>
+
+                {/* Add More Chapters Section */}
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 bg-gray-50">
+                  <h3 className="font-medium mb-2">Add More Chapters</h3>
+                  <p className="text-xs text-gray-600 mb-3">
+                    Paste additional chapters below. Separate each chapter with one blank line.
+                    New chapters will be added after existing ones.
+                  </p>
+                  <textarea
+                    value={uploadForm.bulkChapters}
+                    onChange={(e) => setUploadForm(prev => ({ ...prev, bulkChapters: e.target.value }))}
+                    placeholder="Paste additional chapters here..."
+                    className="input-field font-mono text-sm"
+                    rows={8}
+                  />
+                  <button
+                    onClick={() => {
+                      if (!uploadForm.bulkChapters.trim()) {
+                        alert('Please enter chapter content')
+                        return
+                      }
+                      const newChapters = parseChapters(uploadForm.bulkChapters)
+                      setUploadForm(prev => ({ 
+                        ...prev, 
+                        chapters: newChapters,
+                        bulkChapters: ''
+                      }))
+                      alert(`Parsed ${newChapters.length} new chapters. Click "Add Chapters" to upload them.`)
+                    }}
+                    className="mt-3 w-full btn-primary"
+                    type="button"
+                  >
+                    Parse New Chapters
+                  </button>
+                </div>
+
+                {/* Parsed Chapters Preview */}
+                {uploadForm.chapters.length > 0 && (
+                  <div>
+                    <h3 className="font-medium mb-2">
+                      New Chapters to Add ({uploadForm.chapters.length})
+                    </h3>
+                    <div className="max-h-60 overflow-y-auto border rounded-lg p-3 bg-gray-50">
+                      {uploadForm.chapters.map((ch, idx) => (
+                        <div key={idx} className="flex justify-between items-center py-1 border-b last:border-0">
+                          <span className="text-sm">{ch.title}</span>
+                          <span className="text-xs text-gray-500">
+                            {ch.content.split(' ').filter(w => w).length} words
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-3 pt-4 border-t">
+                  <button
+                    onClick={async () => {
+                      if (uploadForm.chapters.length === 0) {
+                        alert('No chapters to add. Please parse chapters first.')
+                        return
+                      }
+                      
+                      const token = localStorage.getItem('adminToken')
+                      const existingChapterCount = editingBook._count?.chapters || editingBook.chapters?.length || 0
+                      let successCount = 0
+                      
+                      // Upload chapters in batches
+                      for (let i = 0; i < uploadForm.chapters.length; i++) {
+                        const chapter = uploadForm.chapters[i]
+                        const chapterData = {
+                          title: chapter.title || `Chapter ${existingChapterCount + i + 1}`,
+                          content: chapter.content || '',
+                          chapterNumber: existingChapterCount + i + 1,
+                          isPremium: false,
+                          coinCost: 0
+                        }
+                        
+                        try {
+                          const response = await fetch(
+                            `${process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app'}/api/admin/books/${editingBook.id}/chapters`,
+                            {
+                              method: 'POST',
+                              headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                              },
+                              body: JSON.stringify(chapterData)
+                            }
+                          )
+                          
+                          if (response.ok) {
+                            successCount++
+                          }
+                        } catch (err) {
+                          console.error(`Error uploading chapter ${i + 1}:`, err)
+                        }
+                      }
+                      
+                      await fetchBooks()
+                      setEditingBook(null)
+                      resetUploadForm()
+                      alert(`Added ${successCount} of ${uploadForm.chapters.length} new chapters to "${editingBook.title}"!`)
+                    }}
+                    disabled={uploadForm.chapters.length === 0}
+                    className="btn-primary flex-1 disabled:opacity-50"
+                  >
+                    Add {uploadForm.chapters.length} Chapters
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditingBook(null)
+                      resetUploadForm()
+                    }}
+                    className="btn-secondary flex-1"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </AdminLayout>
   )
