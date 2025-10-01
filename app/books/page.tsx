@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { 
   Search, Filter, Plus, Edit, Trash2, 
   Eye, BookOpen, User, Calendar,
   TrendingUp, ChevronLeft, ChevronRight,
-  Upload, X, Save
+  Upload, X, Save, Image
 } from 'lucide-react'
 import { AdminLayout } from '@/components/layout/AdminLayout'
 
@@ -41,6 +41,13 @@ export default function BooksPage() {
   const [editingBook, setEditingBook] = useState<Book | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 12
+  
+  // Autocomplete state
+  const [authorSuggestions, setAuthorSuggestions] = useState<string[]>([])
+  const [tagSuggestions, setTagSuggestions] = useState<string[]>([])
+  const [showAuthorSuggestions, setShowAuthorSuggestions] = useState(false)
+  const [showTagSuggestions, setShowTagSuggestions] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Upload form state
   const [uploadForm, setUploadForm] = useState({
@@ -49,15 +56,45 @@ export default function BooksPage() {
     description: '',
     genre: 'WEREWOLF',
     tags: '',
-    maturityRating: 'TEEN',
     coverImage: '',
+    coverImageFile: null as File | null,
     chapters: [] as { title: string; content: string }[],
     bulkChapters: ''
   })
 
   useEffect(() => {
     fetchBooks()
+    loadAutocompleteData()
   }, [])
+  
+  const loadAutocompleteData = () => {
+    // Load saved authors and tags from localStorage
+    const savedAuthors = JSON.parse(localStorage.getItem('savedAuthors') || '[]')
+    const savedTags = JSON.parse(localStorage.getItem('savedTags') || '[]')
+    setAuthorSuggestions(savedAuthors)
+    setTagSuggestions(savedTags)
+  }
+  
+  const saveAutocompleteData = (author: string, tags: string) => {
+    // Save author
+    const savedAuthors = JSON.parse(localStorage.getItem('savedAuthors') || '[]')
+    if (author && !savedAuthors.includes(author)) {
+      savedAuthors.push(author)
+      localStorage.setItem('savedAuthors', JSON.stringify(savedAuthors))
+      setAuthorSuggestions(savedAuthors)
+    }
+    
+    // Save tags
+    const savedTags = JSON.parse(localStorage.getItem('savedTags') || '[]')
+    const newTags = tags.split(',').map(t => t.trim()).filter(Boolean)
+    newTags.forEach(tag => {
+      if (!savedTags.includes(tag)) {
+        savedTags.push(tag)
+      }
+    })
+    localStorage.setItem('savedTags', JSON.stringify(savedTags))
+    setTagSuggestions(savedTags)
+  }
 
   const fetchBooks = async () => {
     try {
@@ -102,15 +139,29 @@ export default function BooksPage() {
     try {
       const token = localStorage.getItem('adminToken')
       
+      // Save autocomplete data
+      saveAutocompleteData(uploadForm.author, uploadForm.tags)
+      
+      // Handle cover image upload if file is selected
+      let coverUrl = uploadForm.coverImage
+      if (uploadForm.coverImageFile) {
+        // Convert to base64 for simplicity
+        const reader = new FileReader()
+        coverUrl = await new Promise((resolve) => {
+          reader.onloadend = () => resolve(reader.result as string)
+          reader.readAsDataURL(uploadForm.coverImageFile!)
+        })
+      }
+      
       // Format the book data for backend API
       const bookData = {
         title: uploadForm.title,
         authorName: uploadForm.author,
         description: uploadForm.description,
-        maturityRating: uploadForm.maturityRating,
+        maturityRating: 'ADULT',
         genre: uploadForm.genre,
         tags: uploadForm.tags.split(',').map(tag => tag.trim()).filter(Boolean),
-        coverUrl: uploadForm.coverImage || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=300&h=450&fit=crop',
+        coverUrl: coverUrl || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=300&h=450&fit=crop',
         status: 'PUBLISHED',
         chapters: uploadForm.chapters.map((ch, idx) => ({
           title: ch.title || `Chapter ${idx + 1}`,
@@ -202,40 +253,61 @@ export default function BooksPage() {
       description: '',
       genre: 'WEREWOLF',
       tags: '',
-      maturityRating: 'TEEN',
       coverImage: '',
+      coverImageFile: null,
       chapters: [],
       bulkChapters: ''
     })
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
   }
 
   const parseChapters = (text: string) => {
-    // Parse chapters from bulk text
-    // Format expected: Chapter 1: Title\n\nContent...\n\n---\n\nChapter 2: Title\n\nContent...
-    const chapterSeparator = /---+/g
-    const chapterBlocks = text.split(chapterSeparator)
+    // Parse chapters separated by double blank lines
+    // Split by double newlines (blank line between chapters)
+    const chapterBlocks = text.split(/\n\s*\n\s*\n/)
     
     const chapters = chapterBlocks.map((block, index) => {
-      const lines = block.trim().split('\n')
-      let title = `Chapter ${index + 1}`
-      let content = block.trim()
+      const trimmedBlock = block.trim()
+      if (!trimmedBlock) return null
       
-      // Try to extract chapter title from first line
+      const lines = trimmedBlock.split('\n')
+      let title = `Chapter ${index + 1}`
+      let content = trimmedBlock
+      
+      // Check if first line looks like a chapter title
       if (lines.length > 0) {
         const firstLine = lines[0].trim()
-        // Check for patterns like "Chapter 1: Title" or "Chapter 1 - Title" or just "Title"
-        const chapterMatch = firstLine.match(/^(?:Chapter\s+\d+[:\-\s]+)?(.+)$/i)
-        if (chapterMatch && chapterMatch[1]) {
-          title = chapterMatch[1].trim() || title
+        // Check for patterns like "Chapter 1", "Chapter 1: Title", "Chapter 1 - Title"
+        const chapterMatch = firstLine.match(/^Chapter\s+(\d+)[:\-\s]*(.*)?$/i)
+        if (chapterMatch) {
+          const chapterNum = chapterMatch[1]
+          const chapterTitle = chapterMatch[2]?.trim()
+          title = chapterTitle ? `Chapter ${chapterNum}: ${chapterTitle}` : `Chapter ${chapterNum}`
           // Remove title line from content
+          content = lines.slice(1).join('\n').trim()
+        } else if (firstLine.length < 100 && !firstLine.includes('.')) {
+          // If first line is short and doesn't look like a sentence, treat as title
+          title = firstLine
           content = lines.slice(1).join('\n').trim()
         }
       }
       
       return { title, content }
-    }).filter(ch => ch.content) // Filter out empty chapters
+    }).filter((ch): ch is { title: string; content: string } => ch !== null && ch.content !== '') // Filter out null/empty chapters
     
     return chapters
+  }
+  
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setUploadForm(prev => ({ ...prev, coverImageFile: file }))
+      // Create preview URL
+      const previewUrl = URL.createObjectURL(file)
+      setUploadForm(prev => ({ ...prev, coverImage: previewUrl }))
+    }
   }
 
   const handleBulkChapterParse = () => {
@@ -522,14 +594,39 @@ export default function BooksPage() {
                       className="input-field"
                     />
                   </div>
-                  <div>
+                  <div className="relative">
                     <label className="block text-sm font-medium mb-1">Author</label>
                     <input
                       type="text"
                       value={uploadForm.author}
-                      onChange={(e) => setUploadForm(prev => ({ ...prev, author: e.target.value }))}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        setUploadForm(prev => ({ ...prev, author: value }))
+                        setShowAuthorSuggestions(value.length > 0)
+                      }}
+                      onBlur={() => setTimeout(() => setShowAuthorSuggestions(false), 200)}
                       className="input-field"
+                      autoComplete="off"
                     />
+                    {showAuthorSuggestions && uploadForm.author && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                        {authorSuggestions
+                          .filter(s => s.toLowerCase().startsWith(uploadForm.author.toLowerCase()))
+                          .map((suggestion, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              className="w-full text-left px-3 py-2 hover:bg-pink-50 text-sm"
+                              onClick={() => {
+                                setUploadForm(prev => ({ ...prev, author: suggestion }))
+                                setShowAuthorSuggestions(false)
+                              }}
+                            >
+                              {suggestion}
+                            </button>
+                          ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -543,62 +640,101 @@ export default function BooksPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Genre</label>
-                    <select
-                      value={uploadForm.genre}
-                      onChange={(e) => setUploadForm(prev => ({ ...prev, genre: e.target.value }))}
-                      className="input-field"
-                    >
-                      <option value="WEREWOLF">Werewolf</option>
-                      <option value="VAMPIRE">Vampire</option>
-                      <option value="BILLIONAIRE_CEO">Billionaire CEO</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Maturity Rating</label>
-                    <select
-                      value={uploadForm.maturityRating}
-                      onChange={(e) => setUploadForm(prev => ({ ...prev, maturityRating: e.target.value }))}
-                      className="input-field"
-                    >
-                      <option value="GENERAL">General</option>
-                      <option value="TEEN">Teen</option>
-                      <option value="MATURE">Mature</option>
-                      <option value="ADULT">Adult</option>
-                    </select>
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Genre</label>
+                  <select
+                    value={uploadForm.genre}
+                    onChange={(e) => setUploadForm(prev => ({ ...prev, genre: e.target.value }))}
+                    className="input-field"
+                  >
+                    <option value="WEREWOLF">Werewolf</option>
+                    <option value="VAMPIRE">Vampire</option>
+                    <option value="BILLIONAIRE_CEO">Billionaire CEO</option>
+                  </select>
                 </div>
 
-                <div>
+                <div className="relative">
                   <label className="block text-sm font-medium mb-1">Tags (comma separated)</label>
                   <input
                     type="text"
                     value={uploadForm.tags}
-                    onChange={(e) => setUploadForm(prev => ({ ...prev, tags: e.target.value }))}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setUploadForm(prev => ({ ...prev, tags: value }))
+                      const lastTag = value.split(',').pop()?.trim()
+                      setShowTagSuggestions(!!lastTag && lastTag.length > 0)
+                    }}
+                    onBlur={() => setTimeout(() => setShowTagSuggestions(false), 200)}
                     className="input-field"
                     placeholder="alpha, romance, supernatural, etc..."
+                    autoComplete="off"
                   />
+                  {showTagSuggestions && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                      {(() => {
+                        const currentTags = uploadForm.tags.split(',').map(t => t.trim())
+                        const lastTag = currentTags[currentTags.length - 1]
+                        return tagSuggestions
+                          .filter(s => s.toLowerCase().startsWith(lastTag.toLowerCase()) && !currentTags.slice(0, -1).includes(s))
+                          .map((suggestion, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              className="w-full text-left px-3 py-2 hover:bg-pink-50 text-sm"
+                              onClick={() => {
+                                const tags = uploadForm.tags.split(',').map(t => t.trim())
+                                tags[tags.length - 1] = suggestion
+                                setUploadForm(prev => ({ ...prev, tags: tags.join(', ') }))
+                                setShowTagSuggestions(false)
+                              }}
+                            >
+                              {suggestion}
+                            </button>
+                          ))
+                      })()}
+                    </div>
+                  )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1">Cover Image URL</label>
-                  <input
-                    type="text"
-                    value={uploadForm.coverImage}
-                    onChange={(e) => setUploadForm(prev => ({ ...prev, coverImage: e.target.value }))}
-                    className="input-field"
-                    placeholder="https://..."
-                  />
+                  <label className="block text-sm font-medium mb-1">Cover Image</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={uploadForm.coverImage}
+                      onChange={(e) => setUploadForm(prev => ({ ...prev, coverImage: e.target.value, coverImageFile: null }))}
+                      className="input-field flex-1"
+                      placeholder="Enter URL or upload file"
+                    />
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-4 py-2 bg-pink-100 text-pink-700 rounded-lg hover:bg-pink-200 flex items-center gap-2"
+                    >
+                      <Image size={18} />
+                      Upload
+                    </button>
+                  </div>
+                  {uploadForm.coverImage && (
+                    <div className="mt-2">
+                      <img src={uploadForm.coverImage} alt="Cover preview" className="h-32 rounded" />
+                    </div>
+                  )}
                 </div>
 
                 {/* Bulk Chapter Upload Section */}
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 bg-gray-50">
                   <h3 className="font-medium mb-2">Bulk Chapter Upload</h3>
                   <p className="text-xs text-gray-600 mb-3">
-                    Paste all chapters below. Separate chapters with three dashes (---).
-                    Format: Chapter 1: Title\n\nContent...\n\n---\n\nChapter 2: Title\n\nContent...
+                    Paste all chapters below. Separate chapters with a blank line (double enter).
+                    Format: Chapter 1: Title\n\nContent...\n\n\n\nChapter 2: Title\n\nContent...
                   </p>
                   <textarea
                     value={uploadForm.bulkChapters}
