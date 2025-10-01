@@ -12,19 +12,24 @@ import { AdminLayout } from '@/components/layout/AdminLayout'
 interface Book {
   id: string
   title: string
-  author: string
+  author?: string
+  authorName?: string
   slug: string
   coverImage?: string
+  coverUrl?: string
   description: string
   maturityRating: string
   isPublished: boolean
-  uploadedBy: 'ADMIN' | 'AUTHOR'
+  uploadedBy?: 'ADMIN' | 'AUTHOR'
   createdAt: string
-  chapters?: number
+  chapters?: any[]
+  _count?: {
+    chapters?: number
+    favorites?: number
+  }
   reads?: number
   revenue?: number
   authorId?: string
-  authorName?: string
 }
 
 export default function BooksPage() {
@@ -73,6 +78,25 @@ export default function BooksPage() {
   const handleUploadBook = async () => {
     try {
       const token = localStorage.getItem('adminToken')
+      
+      // Format the book data for backend API
+      const bookData = {
+        title: uploadForm.title,
+        authorName: uploadForm.author,
+        description: uploadForm.description,
+        maturityRating: uploadForm.maturityRating,
+        genre: 'ROMANCE',
+        coverUrl: uploadForm.coverImage || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=300&h=450&fit=crop',
+        status: 'PUBLISHED',
+        chapters: uploadForm.chapters.map((ch, idx) => ({
+          title: ch.title || `Chapter ${idx + 1}`,
+          content: ch.content || '',
+          chapterNumber: idx + 1,
+          isPremium: false,
+          coinCost: 0
+        }))
+      }
+      
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app'}/api/admin/books`,
         {
@@ -81,16 +105,7 @@ export default function BooksPage() {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({
-            ...uploadForm,
-            isPublished: true,
-            chapters: uploadForm.chapters.map((ch, idx) => ({
-              ...ch,
-              orderIndex: idx + 1,
-              coinCost: 0,
-              isPublished: true
-            }))
-          })
+          body: JSON.stringify(bookData)
         }
       )
 
@@ -98,10 +113,11 @@ export default function BooksPage() {
         await fetchBooks()
         setShowUploadModal(false)
         resetUploadForm()
-        alert('Book uploaded successfully!')
+        alert('Book uploaded successfully with chapters!')
       } else {
-        const error = await response.text()
-        alert(`Failed to upload book: ${error}`)
+        const errorText = await response.text()
+        console.error('Upload error:', errorText)
+        alert(`Failed to upload book: ${errorText}`)
       }
     } catch (error) {
       console.error('Failed to upload book:', error)
@@ -296,9 +312,9 @@ export default function BooksPage() {
           {paginatedBooks.map((book) => (
             <div key={book.id} className="card hover:shadow-lg transition-shadow">
               <div className="aspect-[3/4] bg-gray-200 rounded-lg mb-4 overflow-hidden">
-                {book.coverImage ? (
+                {(book.coverImage || book.coverUrl) ? (
                   <img 
-                    src={book.coverImage} 
+                    src={book.coverImage || book.coverUrl} 
                     alt={book.title}
                     className="w-full h-full object-cover"
                   />
@@ -311,15 +327,17 @@ export default function BooksPage() {
               
               <div className="space-y-2">
                 <h3 className="font-bold text-lg line-clamp-1">{book.title}</h3>
-                <p className="text-sm text-gray-600">by {book.author}</p>
+                <p className="text-sm text-gray-600">by {book.authorName || book.author || 'Unknown'}</p>
                 
                 <div className="flex items-center gap-2 text-xs">
                   <span className={`px-2 py-1 rounded-full ${
                     book.uploadedBy === 'ADMIN' 
                       ? 'bg-blue-100 text-blue-700' 
-                      : 'bg-purple-100 text-purple-700'
+                      : book.uploadedBy === 'AUTHOR'
+                      ? 'bg-purple-100 text-purple-700'
+                      : 'bg-gray-100 text-gray-700'
                   }`}>
-                    {book.uploadedBy}
+                    {book.uploadedBy || 'ADMIN'}
                   </span>
                   <span className={`px-2 py-1 rounded-full ${
                     book.isPublished 
@@ -331,8 +349,8 @@ export default function BooksPage() {
                 </div>
 
                 <div className="text-xs text-gray-500 space-y-1">
-                  <p>{book.chapters || 0} chapters</p>
-                  <p>{book.reads || 0} reads</p>
+                  <p>{book._count?.chapters || book.chapters?.length || 0} chapters</p>
+                  <p>{book._count?.favorites || book.reads || 0} reads</p>
                   {book.revenue && <p>${book.revenue.toFixed(2)} revenue</p>}
                 </div>
 
