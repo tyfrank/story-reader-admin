@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { 
   Search, Filter, Plus, Edit, Trash2, 
   Eye, BookOpen, User, Calendar,
@@ -35,6 +36,7 @@ interface Book {
 }
 
 export default function BooksPage() {
+  const router = useRouter()
   const [books, setBooks] = useState<Book[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -140,6 +142,12 @@ export default function BooksPage() {
   const handleUploadBook = async () => {
     try {
       const token = localStorage.getItem('adminToken')
+      
+      if (!token) {
+        alert('Session expired. Please login again.')
+        router.push('/login')
+        return
+      }
       
       // Save autocomplete data
       saveAutocompleteData(uploadForm.author, uploadForm.tags)
@@ -409,11 +417,31 @@ export default function BooksPage() {
         } else {
           const errorText = await bookOnlyResponse.text()
           console.error('Upload error:', errorText)
+          
+          // Check for JWT expiration
+          if (errorText.includes('jwt expired') || errorText.includes('Invalid token') || bookOnlyResponse.status === 401) {
+            alert('Your session has expired. Please login again.')
+            localStorage.removeItem('adminToken')
+            localStorage.removeItem('adminUser')
+            router.push('/login')
+            return
+          }
+          
           alert(`Failed to upload book: ${errorText}`)
         }
       } else {
         const errorText = await response.text()
         console.error('Upload error:', errorText)
+        
+        // Check for JWT expiration
+        if (errorText.includes('jwt expired') || errorText.includes('Invalid token') || response.status === 401) {
+          alert('Your session has expired. Please login again.')
+          localStorage.removeItem('adminToken')
+          localStorage.removeItem('adminUser')
+          router.push('/login')
+          return
+        }
+        
         alert(`Failed to upload book: ${errorText}`)
       }
     } catch (error) {
