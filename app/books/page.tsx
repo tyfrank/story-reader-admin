@@ -144,13 +144,44 @@ export default function BooksPage() {
       // Save autocomplete data
       saveAutocompleteData(uploadForm.author, uploadForm.tags)
       
-      // Handle cover image - if it's a blob URL, don't use it (that's just for preview)
+      // Handle cover image upload
       let coverUrl = uploadForm.coverImage
-      if (coverUrl && coverUrl.startsWith('blob:')) {
-        // If there's a file upload, we can't handle it directly, so use default
-        // In a real implementation, you'd upload to a CDN first
-        coverUrl = editingBook?.coverUrl || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=300&h=450&fit=crop'
-      } else if (!coverUrl) {
+      
+      // If there's a file selected, upload it to Cloudinary via backend
+      if (uploadForm.coverImageFile) {
+        const formData = new FormData()
+        formData.append('file', uploadForm.coverImageFile)
+        formData.append('upload_preset', 'romanceme')
+        formData.append('folder', 'romanceme/book-covers')
+        
+        try {
+          // Upload directly to Cloudinary (using unsigned preset)
+          const cloudinaryResponse = await fetch(
+            'https://api.cloudinary.com/v1_1/dhfxs9dya/image/upload',
+            {
+              method: 'POST',
+              body: formData
+            }
+          )
+          
+          if (cloudinaryResponse.ok) {
+            const cloudinaryData = await cloudinaryResponse.json()
+            coverUrl = cloudinaryData.secure_url
+          } else {
+            console.error('Failed to upload image to Cloudinary')
+            // Fallback to URL if upload fails
+            if (!coverUrl || coverUrl.startsWith('blob:')) {
+              coverUrl = editingBook?.coverUrl || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=300&h=450&fit=crop'
+            }
+          }
+        } catch (error) {
+          console.error('Image upload error:', error)
+          if (!coverUrl || coverUrl.startsWith('blob:')) {
+            coverUrl = editingBook?.coverUrl || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=300&h=450&fit=crop'
+          }
+        }
+      } else if (!coverUrl || coverUrl.startsWith('blob:')) {
+        // No file and no valid URL, use existing or default
         coverUrl = editingBook?.coverUrl || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=300&h=450&fit=crop'
       }
       
@@ -911,20 +942,14 @@ export default function BooksPage() {
 
                 <div>
                   <label className="block text-sm font-medium mb-1">Cover Image</label>
-                  {uploadForm.coverImage && uploadForm.coverImage.startsWith('blob:') && (
-                    <p className="text-xs text-orange-600 mb-1">
-                      ⚠️ File uploads not supported yet. Please use a direct image URL instead.
-                    </p>
-                  )}
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      value={uploadForm.coverImage && !uploadForm.coverImage.startsWith('blob:') ? uploadForm.coverImage : ''}
+                      value={uploadForm.coverImage}
                       onChange={(e) => setUploadForm(prev => ({ ...prev, coverImage: e.target.value, coverImageFile: null }))}
                       className="input-field flex-1"
-                      placeholder="Enter image URL (e.g., https://...)"
+                      placeholder="Enter URL or upload file"
                     />
-                    {/* File upload disabled for now - only URLs work
                     <input
                       ref={fileInputRef}
                       type="file"
@@ -940,9 +965,8 @@ export default function BooksPage() {
                       <Image size={18} />
                       Upload
                     </button>
-                    */}
                   </div>
-                  {uploadForm.coverImage && !uploadForm.coverImage.startsWith('blob:') && (
+                  {uploadForm.coverImage && (
                     <div className="mt-2">
                       <img src={uploadForm.coverImage} alt="Cover preview" className="h-32 rounded" />
                     </div>
