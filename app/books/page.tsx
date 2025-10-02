@@ -147,28 +147,30 @@ export default function BooksPage() {
       // Handle cover image upload
       let coverUrl = uploadForm.coverImage
       
-      // If there's a file selected, upload it to Cloudinary via backend
+      // If there's a file selected, upload it via backend
       if (uploadForm.coverImageFile) {
         const formData = new FormData()
         formData.append('file', uploadForm.coverImageFile)
-        formData.append('upload_preset', 'romanceme')
-        formData.append('folder', 'romanceme/book-covers')
         
         try {
-          // Upload directly to Cloudinary (using unsigned preset)
-          const cloudinaryResponse = await fetch(
-            'https://api.cloudinary.com/v1_1/dhfxs9dya/image/upload',
+          // Upload through backend which handles Cloudinary
+          const uploadResponse = await fetch(
+            `${process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app'}/api/upload/book-cover`,
             {
               method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`
+              },
               body: formData
             }
           )
           
-          if (cloudinaryResponse.ok) {
-            const cloudinaryData = await cloudinaryResponse.json()
-            coverUrl = cloudinaryData.secure_url
+          if (uploadResponse.ok) {
+            const uploadData = await uploadResponse.json()
+            coverUrl = uploadData.coverUrl || uploadData.url || uploadData.secure_url
+            console.log('Cover uploaded successfully:', coverUrl)
           } else {
-            console.error('Failed to upload image to Cloudinary')
+            console.error('Failed to upload image via backend')
             // Fallback to URL if upload fails
             if (!coverUrl || coverUrl.startsWith('blob:')) {
               coverUrl = editingBook?.coverUrl || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=300&h=450&fit=crop'
