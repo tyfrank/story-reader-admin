@@ -281,6 +281,12 @@ export default function EditBookPage() {
         })
       });
 
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Upload failed:', response.status, errorText);
+        throw new Error(`Upload failed: ${response.status} - ${errorText}`);
+      }
+
       const data = await response.json();
       if (data.success) {
         setUploadStatus({ 
