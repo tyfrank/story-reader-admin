@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { 
   Search, Filter, Plus, Edit, Trash2, 
   Eye, BookOpen, User, Calendar,
@@ -761,27 +762,13 @@ export default function BooksPage() {
                   >
                     {book.isPublished ? 'Unpublish' : 'Publish'}
                   </button>
-                  <button
-                    onClick={() => {
-                      setEditingBook(book)
-                      setUploadForm({
-                        title: book.title,
-                        author: book.authorName || book.author || '',
-                        description: book.description || '',
-                        genre: book.genre?.[0] || 'WEREWOLF',
-                        tags: Array.isArray(book.tags) ? book.tags.join(', ') : '',
-                        coverImage: book.coverUrl || book.coverImage || '',
-                        coverImageFile: null,
-                        chapters: [],
-                        bulkChapters: ''
-                      })
-                      setShowUploadModal(true)
-                    }}
-                    className="p-1 hover:bg-gray-100 rounded"
-                    title="Edit"
+                  <Link
+                    href={`/books/${book.id}/edit`}
+                    className="p-1 hover:bg-gray-100 rounded inline-block"
+                    title="Edit Chapters"
                   >
                     <Edit size={16} />
-                  </button>
+                  </Link>
                   <button
                     onClick={() => handleDeleteBook(book.id)}
                     className="p-1 hover:bg-red-100 rounded"
