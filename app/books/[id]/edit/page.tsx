@@ -266,38 +266,63 @@ export default function EditBookPage() {
         return;
       }
 
-      // Upload using enhanced-upload endpoint
+      // Upload chapters one at a time using the working endpoint on Railway
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app';
-      const response = await fetch(`${apiUrl}/api/books/enhanced-upload`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
-        },
-        body: JSON.stringify({
-          bookId,
-          chapters: parsedChapters,
-          formatParagraphs: true
-        })
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Upload failed:', response.status, errorText);
-        throw new Error(`Upload failed: ${response.status} - ${errorText}`);
+      
+      let successCount = 0;
+      const failedChapters = [];
+      
+      // Get current chapter count to determine starting chapter number
+      const currentChapterCount = book?.chapters?.length || 0;
+      
+      for (let i = 0; i < parsedChapters.length; i++) {
+        const chapter = parsedChapters[i];
+        const chapterNumber = currentChapterCount + i + 1;
+        
+        try {
+          const response = await fetch(`${apiUrl}/api/admin/books/${bookId}/chapters`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+            },
+            body: JSON.stringify({
+              title: chapter.title,
+              content: chapter.content,
+              chapterNumber: chapterNumber,
+              wordCount: chapter.content.split(/\s+/).length,
+              isFree: chapterNumber <= 5,
+              coinCost: chapterNumber <= 5 ? 0 : 20
+            })
+          });
+          
+          if (response.ok) {
+            successCount++;
+          } else {
+            const error = await response.text();
+            console.error(`Failed to upload chapter ${chapterNumber}:`, error);
+            failedChapters.push(chapterNumber);
+          }
+        } catch (error) {
+          console.error(`Error uploading chapter ${chapterNumber}:`, error);
+          failedChapters.push(chapterNumber);
+        }
       }
-
-      const data = await response.json();
-      if (data.success) {
+      
+      if (successCount > 0) {
+        const message = failedChapters.length > 0 
+          ? `Added ${successCount} chapters. Failed: ${failedChapters.join(', ')}`
+          : `Successfully added ${successCount} chapters!`;
+        
         setUploadStatus({ 
-          type: 'success', 
-          message: `Successfully added ${data.data.chaptersCreated} chapters!` 
+          type: failedChapters.length > 0 ? 'error' : 'success', 
+          message 
         });
         setBulkChapters('');
         fetchBook();
         setActiveTab('chapters');
       } else {
-        throw new Error(data.message || 'Failed to upload chapters');
+        throw new Error('Failed to upload any chapters');
       }
     } catch (error: any) {
       setUploadStatus({ type: 'error', message: error.message || 'Failed to upload chapters' });
