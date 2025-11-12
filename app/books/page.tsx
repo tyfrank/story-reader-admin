@@ -7,9 +7,11 @@ import {
   Search, Filter, Plus, Edit, Trash2, 
   Eye, BookOpen, User, Calendar,
   TrendingUp, ChevronLeft, ChevronRight,
-  Upload, X, Save, Image
+  Upload, X, Save, Image, FileText, Wrench, List
 } from 'lucide-react'
 import { AdminLayout } from '@/components/layout/AdminLayout'
+import { AddChaptersModal } from '@/components/books/AddChaptersModal'
+import { ChapterManager } from '@/components/books/ChapterManager'
 
 interface Book {
   id: string
@@ -44,6 +46,8 @@ export default function BooksPage() {
   const [filterType, setFilterType] = useState<string>('ALL')
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [editingBook, setEditingBook] = useState<Book | null>(null)
+  const [selectedBookForChapters, setSelectedBookForChapters] = useState<Book | null>(null)
+  const [selectedBookForManager, setSelectedBookForManager] = useState<Book | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 12
   
@@ -515,38 +519,63 @@ export default function BooksPage() {
   }
 
   const parseChapters = (text: string) => {
-    // Parse chapters separated by single blank line
-    // Split by double newlines (one blank line between chapters)
-    const chapterBlocks = text.split(/\n\s*\n/)
+    // Clean up the text first
+    const cleanedText = text.trim()
+    if (!cleanedText) return []
     
-    const chapters = chapterBlocks.map((block, index) => {
-      const trimmedBlock = block.trim()
-      if (!trimmedBlock) return null
-      
-      const lines = trimmedBlock.split('\n')
-      let title = `Chapter ${index + 1}`
-      let content = trimmedBlock
-      
-      // Check if first line looks like a chapter title
-      if (lines.length > 0) {
-        const firstLine = lines[0].trim()
-        // Check for patterns like "Chapter 1", "Chapter 1: Title", "Chapter 1 - Title"
-        const chapterMatch = firstLine.match(/^Chapter\s+(\d+)[:\-\s]*(.*)?$/i)
-        if (chapterMatch) {
-          const chapterNum = chapterMatch[1]
-          const chapterTitle = chapterMatch[2]?.trim()
-          title = chapterTitle ? `Chapter ${chapterNum}: ${chapterTitle}` : `Chapter ${chapterNum}`
-          // Remove title line from content
-          content = lines.slice(1).join('\n').trim()
-        } else if (firstLine.length < 100 && !firstLine.includes('.')) {
-          // If first line is short and doesn't look like a sentence, treat as title
-          title = firstLine
-          content = lines.slice(1).join('\n').trim()
+    // Try multiple parsing strategies
+    let chapters: { title: string; content: string }[] = []
+    
+    // Strategy 1: Look for explicit chapter markers (Chapter 1, Chapter 2, etc.)
+    const chapterRegex = /^(?:Chapter|CHAPTER|Chap|Ch\.?)\s+(\d+)[:\-\s]*(.*?)$/gmi
+    const chapterMatches = Array.from(cleanedText.matchAll(chapterRegex))
+    
+    if (chapterMatches.length > 0) {
+      // Parse based on chapter markers
+      for (let i = 0; i < chapterMatches.length; i++) {
+        const match = chapterMatches[i]
+        const chapterNum = match[1]
+        const chapterTitle = match[2]?.trim() || ''
+        const startIdx = match.index! + match[0].length
+        const endIdx = i < chapterMatches.length - 1 ? chapterMatches[i + 1].index : cleanedText.length
+        
+        const content = cleanedText.substring(startIdx, endIdx).trim()
+        const title = chapterTitle ? `Chapter ${chapterNum}: ${chapterTitle}` : `Chapter ${chapterNum}`
+        
+        if (content) {
+          chapters.push({ title, content })
         }
       }
+    } else {
+      // Strategy 2: Split by double newlines (blank lines)
+      const blocks = cleanedText.split(/\n\s*\n+/)
       
-      return { title, content }
-    }).filter((ch): ch is { title: string; content: string } => ch !== null && ch.content !== '') // Filter out null/empty chapters
+      chapters = blocks.map((block, index) => {
+        const trimmedBlock = block.trim()
+        if (!trimmedBlock) return null
+        
+        const lines = trimmedBlock.split('\n')
+        let title = `Chapter ${index + 1}`
+        let content = trimmedBlock
+        
+        // Check if first line could be a title
+        if (lines.length > 1) {
+          const firstLine = lines[0].trim()
+          // If first line is short and doesn't end with punctuation, treat as title
+          if (firstLine.length < 100 && !firstLine.match(/[.!?]$/)) {
+            title = firstLine
+            content = lines.slice(1).join('\n').trim()
+          }
+        }
+        
+        return content ? { title, content } : null
+      }).filter((ch): ch is { title: string; content: string } => ch !== null)
+    }
+    
+    // If still no chapters parsed, treat entire text as one chapter
+    if (chapters.length === 0 && cleanedText.length > 0) {
+      chapters = [{ title: 'Chapter 1', content: cleanedText }]
+    }
     
     return chapters
   }
@@ -762,13 +791,76 @@ export default function BooksPage() {
                   >
                     {book.isPublished ? 'Unpublish' : 'Publish'}
                   </button>
-                  <Link
-                    href={`/books/${book.id}/edit`}
-                    className="p-1 hover:bg-gray-100 rounded inline-block"
-                    title="Edit Chapters"
+                  <button
+                    onClick={() => setSelectedBookForManager(book)}
+                    className="p-1 hover:bg-blue-100 rounded"
+                    title="Manage Chapters"
+                  >
+                    <List size={16} className="text-blue-600" />
+                  </button>
+                  <button
+                    onClick={() => setSelectedBookForChapters(book)}
+                    className="p-1 hover:bg-green-100 rounded"
+                    title="Add Chapters"
+                  >
+                    <FileText size={16} />
+                  </button>
+                  {(book.chapters?.some((ch: any) => ch.title?.startsWith('#') || ch.title?.match(/^Chapter \d+$/i))) && (
+                    <button
+                      onClick={async () => {
+                        if (confirm('Fix chapter titles (remove # and identify "Chapter X" titles)?')) {
+                          try {
+                            const token = localStorage.getItem('adminToken');
+                            const response = await fetch(
+                              `${process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app'}/api/admin/books/${book.id}/fix-chapters`,
+                              {
+                                method: 'POST',
+                                headers: {
+                                  'Authorization': `Bearer ${token}`,
+                                  'Content-Type': 'application/json'
+                                }
+                              }
+                            );
+                            const data = await response.json();
+                            if (data.success) {
+                              alert(data.message);
+                              fetchBooks();
+                            } else {
+                              alert('Failed to fix chapters');
+                            }
+                          } catch (error) {
+                            console.error('Error fixing chapters:', error);
+                            alert('Error fixing chapters');
+                          }
+                        }
+                      }}
+                      className="p-1 hover:bg-yellow-100 rounded"
+                      title="Fix Chapter Titles"
+                    >
+                      <Wrench size={16} className="text-yellow-600" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setEditingBook(book)
+                      setUploadForm({
+                        title: book.title,
+                        author: book.authorName || book.author || '',
+                        description: book.description || '',
+                        genre: book.genre?.[0] || 'WEREWOLF',
+                        tags: Array.isArray(book.tags) ? book.tags.join(', ') : '',
+                        coverImage: book.coverUrl || book.coverImage || '',
+                        coverImageFile: null,
+                        chapters: [],
+                        bulkChapters: ''
+                      })
+                      setShowUploadModal(true)
+                    }}
+                    className="p-1 hover:bg-gray-100 rounded"
+                    title="Edit"
                   >
                     <Edit size={16} />
-                  </Link>
+                  </button>
                   <button
                     onClick={() => handleDeleteBook(book.id)}
                     className="p-1 hover:bg-red-100 rounded"
@@ -1087,5 +1179,30 @@ export default function BooksPage() {
         )}
       </div>
     </AdminLayout>
+    
+    {/* Add Chapters Modal */}
+    {selectedBookForChapters && (
+      <AddChaptersModal
+        bookId={selectedBookForChapters.id}
+        bookTitle={selectedBookForChapters.title}
+        onClose={() => setSelectedBookForChapters(null)}
+        onSuccess={() => {
+          fetchBooks()
+          setSelectedBookForChapters(null)
+        }}
+      />
+    )}
+    
+    {/* Chapter Manager Modal */}
+    {selectedBookForManager && (
+      <ChapterManager
+        bookId={selectedBookForManager.id}
+        bookTitle={selectedBookForManager.title}
+        onClose={() => {
+          setSelectedBookForManager(null)
+          fetchBooks() // Refresh to update chapter counts
+        }}
+      />
+    )}
   )
 }

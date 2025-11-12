@@ -25,6 +25,9 @@ export function BookUpload() {
   const [uploading, setUploading] = useState(false)
   const [message, setMessage] = useState('')
   const [chapterText, setChapterText] = useState('')
+  const [uploadMode, setUploadMode] = useState<'simple' | 'bulk'>('bulk')
+  const [parsedChapters, setParsedChapters] = useState<any[]>([])
+  const [showPreview, setShowPreview] = useState(false)
 
   useEffect(() => {
     const token = localStorage.getItem('adminToken')
@@ -59,36 +62,19 @@ export function BookUpload() {
     setIsLoggedIn(false)
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setUploading(true)
-    setMessage('')
+  const parseChapters = async () => {
+    if (!chapterText.trim()) {
+      setMessage('Please enter chapter content')
+      return
+    }
 
     try {
-      // Parse chapters from text area (each chapter on a new line)
-      const chaptersArray = chapterText.split('\n').filter(line => line.trim()).map((line, index) => {
-        const [title, ...contentParts] = line.split('|')
-        return {
-          chapterNumber: index + 1,
-          title: title.trim(),
-          content: contentParts.join('|').trim() || 'Chapter content here...',
-          isFree: index === 0,
-          coinCost: index === 0 ? 0 : 2
-        }
-      })
-
-      const bookData = {
-        ...formData,
-        tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean),
-        chapters: chaptersArray
-      }
-
-      // Get auth token from localStorage
       const token = localStorage.getItem('adminToken')
       
+      // Use the new parse endpoint
       const response = await axios.post(
-        `${API_URL}/api/admin/books`,
-        bookData,
+        `${API_URL}/api/admin/parse-chapters`,
+        { content: chapterText },
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -98,24 +84,121 @@ export function BookUpload() {
       )
 
       if (response.data.success) {
-        setMessage('Book uploaded successfully!')
-        setFormData({
-          title: '',
-          authorName: '',
-          description: '',
-          genre: '',
-          tags: '',
-          coverUrl: '',
-          status: 'draft',
-          chapters: []
-        })
-        setChapterText('')
+        setParsedChapters(response.data.data)
+        setShowPreview(true)
+        
+        // Show validation issues if any
+        if (response.data.validation && response.data.validation.issues?.length > 0) {
+          setMessage(`Parsed ${response.data.data.length} chapters with warnings: ${response.data.validation.issues.join(', ')}`)
+        } else if (response.data.data.length === 0) {
+          setMessage('No chapters found. Make sure each chapter title starts with # (e.g., #Welcome to Nowhere)')
+          setShowPreview(false)
+        } else {
+          setMessage(`Parsed ${response.data.data.length} chapters successfully!`)
+        }
       }
     } catch (error: any) {
-      setMessage(`Error: ${error.response?.data?.message || error.message}`)
+      setMessage(`Error parsing chapters: ${error.response?.data?.message || error.message}`)
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setUploading(true)
+    setMessage('')
+
+    try {
+      let bookData: any = {
+        ...formData,
+        tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean)
+      }
+
+      const token = localStorage.getItem('adminToken')
+      
+      if (!token) {
+        setMessage('Please login again - session expired')
+        setIsLoggedIn(false)
+        return
+      }
+      
+      if (uploadMode === 'bulk' && chapterText.trim()) {
+        // Use the new import endpoint for bulk text with auto-parsing
+        const response = await axios.post(
+          `${API_URL}/api/admin/import-book`,
+          {
+            content: chapterText,
+            title: formData.title || undefined,
+            authorName: formData.authorName || undefined,
+            description: formData.description || undefined,
+            genre: formData.genre ? [formData.genre] : undefined,
+            parseChapters: true
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        )
+
+        if (response.data.success) {
+          setMessage(`Book uploaded successfully with ${response.data.data.chapters?.length || 0} chapters!`)
+          resetForm()
+        } else {
+          throw new Error(response.data.message || 'Upload failed')
+        }
+      } else {
+        // Use existing endpoint for manual chapter entry
+        const chaptersArray = parsedChapters.length > 0 ? parsedChapters : []
+        
+        bookData.chapters = chaptersArray
+
+        const response = await axios.post(
+          `${API_URL}/api/admin/books`,
+          bookData,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        )
+
+        if (response.data.success) {
+          setMessage('Book uploaded successfully!')
+          resetForm()
+        }
+      }
+    } catch (error: any) {
+      console.error('Upload error:', error)
+      
+      // Check if it's an auth error
+      if (error.response?.status === 401 || error.response?.data?.message?.includes('token')) {
+        setMessage('Session expired. Please login again.')
+        setIsLoggedIn(false)
+        localStorage.removeItem('adminToken')
+      } else {
+        setMessage(`Error: ${error.response?.data?.message || error.message}`)
+      }
     } finally {
       setUploading(false)
     }
+  }
+
+  const resetForm = () => {
+    setFormData({
+      title: '',
+      authorName: '',
+      description: '',
+      genre: '',
+      tags: '',
+      coverUrl: '',
+      status: 'draft',
+      chapters: []
+    })
+    setChapterText('')
+    setParsedChapters([])
+    setShowPreview(false)
   }
 
   if (!isLoggedIn) {
@@ -266,19 +349,112 @@ export function BookUpload() {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Chapters (one per line, format: Title | Content)
+          <div className="border-t pt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Upload Mode
             </label>
+            <div className="flex space-x-4 mb-4">
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  value="bulk"
+                  checked={uploadMode === 'bulk'}
+                  onChange={(e) => setUploadMode(e.target.value as 'bulk')}
+                  className="mr-2"
+                />
+                <span>Bulk Upload (Paste Full Book Text)</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  value="simple"
+                  checked={uploadMode === 'simple'}
+                  onChange={(e) => setUploadMode(e.target.value as 'simple')}
+                  className="mr-2"
+                />
+                <span>Simple (Title | Content per line)</span>
+              </label>
+            </div>
+
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {uploadMode === 'bulk' ? 'Book Content' : 'Chapters (one per line, format: Title | Content)'}
+            </label>
+            <div className="text-xs text-gray-500 mb-2">
+              {uploadMode === 'bulk' ? (
+                <>
+                  <p>Paste your entire book text below. The system automatically detects chapters:</p>
+                  <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
+                    <p className="font-semibold text-green-800">✅ RECOMMENDED: Use # for chapter titles</p>
+                    <pre className="bg-white p-2 rounded mt-1 text-xs border">
+{`#Welcome to Nowhere
+
+Sarah walked into the coffee shop...
+[content continues...]
+
+#Unexpected Meeting
+
+The next morning brought...
+[content continues...]`}
+                    </pre>
+                    <p className="text-xs mt-1 text-green-700">This prevents subtitles from being detected as chapters!</p>
+                  </div>
+                  
+                  <p className="mt-3">Also supports:</p>
+                  <ul className="list-disc list-inside mt-1">
+                    <li><strong>Numbered format:</strong> Chapter 1: Title, CHAPTER 1, Part 1</li>
+                    <li><strong>Title-only format:</strong> Short titles followed by content</li>
+                    <li><strong>Plain text:</strong> Will be treated as a single chapter</li>
+                  </ul>
+                  
+                  <p className="mt-2">Optional: Include metadata at the top:</p>
+                  <pre className="bg-gray-100 p-2 rounded mt-1 text-xs">
+{`Title: Your Book Title
+Author: Author Name
+
+#Welcome to Nowhere
+Content here...`}
+                  </pre>
+                </>
+              ) : (
+                <p>Enter each chapter on a new line using format: Chapter Title | Chapter content...</p>
+              )}
+            </div>
             <textarea
               value={chapterText}
               onChange={(e) => setChapterText(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              rows={6}
-              placeholder="Chapter 1: The Beginning | It was a dark and stormy night..."
-              required
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+              rows={uploadMode === 'bulk' ? 12 : 6}
+              placeholder={uploadMode === 'bulk' ? 
+                'Paste your entire book text here...\n\nChapter 1: The Beginning\n\nIt was a dark and stormy night...' :
+                'Chapter 1: The Beginning | It was a dark and stormy night...'}
+              required={uploadMode === 'bulk'}
             />
+            
+            {uploadMode === 'bulk' && (
+              <button
+                type="button"
+                onClick={parseChapters}
+                className="mt-2 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+              >
+                Preview Parsed Chapters
+              </button>
+            )}
           </div>
+
+          {showPreview && parsedChapters.length > 0 && (
+            <div className="border rounded p-4 bg-gray-50">
+              <h3 className="font-semibold mb-2">Parsed Chapters Preview:</h3>
+              <div className="max-h-48 overflow-y-auto space-y-2">
+                {parsedChapters.map((chapter, idx) => (
+                  <div key={idx} className="border-b pb-2">
+                    <p className="font-medium">Chapter {chapter.number}: {chapter.title}</p>
+                    <p className="text-sm text-gray-600">Words: {chapter.wordCount}</p>
+                    <p className="text-xs text-gray-500 truncate">{chapter.content.substring(0, 100)}...</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
