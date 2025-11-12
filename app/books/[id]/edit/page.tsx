@@ -609,17 +609,26 @@ Use multiple line breaks for spacing between paragraphs or dialogue."
                 <textarea
                   value={bulkChapters}
                   onChange={(e) => setBulkChapters(e.target.value)}
-                  placeholder={`Chapter ${(book?.chapters?.length || 0) + 1}: Title\nContent...\n\nChapter ${(book?.chapters?.length || 0) + 2}: Title\nContent...`}
+                  placeholder={`Paste all chapters here. Separate each chapter with one blank line.
+Format: Chapter ${(book?.chapters?.length || 0) + 1}: Title
+Content...
+
+Chapter ${(book?.chapters?.length || 0) + 2}: Title
+Content...
+
+OR just paste the full text and click "Parse Chapters"`}
                   rows={15}
                   className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-pink-500 font-mono text-sm"
                 />
-                <button
-                  onClick={handleBulkUpload}
-                  disabled={saving || !bulkChapters.trim()}
-                  className="mt-4 bg-pink-600 text-white px-6 py-2 rounded-lg hover:bg-pink-700 disabled:opacity-50"
-                >
-                  {saving ? 'Uploading...' : 'Add Chapters'}
-                </button>
+                <div className="flex gap-2 mt-4">
+                  <button
+                    onClick={handleBulkUpload}
+                    disabled={saving || !bulkChapters.trim()}
+                    className="flex-1 bg-pink-600 text-white px-6 py-2 rounded-lg hover:bg-pink-700 disabled:opacity-50"
+                  >
+                    {saving ? 'Uploading...' : 'Parse & Add Chapters'}
+                  </button>
+                </div>
               </div>
             </div>
           )}
