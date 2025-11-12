@@ -107,7 +107,8 @@ export default function EditBookPage() {
   const handleSaveMetadata = async () => {
     try {
       setSaving(true);
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/books/update-metadata`, {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app';
+      const response = await fetch(`${apiUrl}/api/books/update-metadata`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -141,7 +142,8 @@ export default function EditBookPage() {
 
     try {
       setSaving(true);
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/chapters/${editingChapter.id}/update`, {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app';
+      const response = await fetch(`${apiUrl}/api/chapters/${editingChapter.id}/update`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -150,7 +152,7 @@ export default function EditBookPage() {
         body: JSON.stringify({
           title: editingChapter.title,
           content: editingChapter.content,
-          formatContent: true
+          formatContent: false  // Don't auto-format to preserve your spacing
         })
       });
 
@@ -159,10 +161,11 @@ export default function EditBookPage() {
         setEditingChapter(null);
         fetchBook();
       } else {
-        throw new Error('Failed to update chapter');
+        const error = await response.text();
+        throw new Error(error || 'Failed to update chapter');
       }
-    } catch (error) {
-      setUploadStatus({ type: 'error', message: 'Failed to update chapter' });
+    } catch (error: any) {
+      setUploadStatus({ type: 'error', message: error.message || 'Failed to update chapter' });
     } finally {
       setSaving(false);
     }
@@ -170,7 +173,8 @@ export default function EditBookPage() {
 
   const handleDeleteChapter = async (chapterNumber: number) => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/books/${bookId}/chapters/${chapterNumber}`, {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app';
+      const response = await fetch(`${apiUrl}/api/books/${bookId}/chapters/${chapterNumber}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
@@ -243,7 +247,8 @@ export default function EditBookPage() {
       }
 
       // Upload using enhanced-upload endpoint
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/books/enhanced-upload`, {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app';
+      const response = await fetch(`${apiUrl}/api/books/enhanced-upload`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -494,8 +499,14 @@ export default function EditBookPage() {
                             value={editingChapter.content}
                             onChange={(e) => setEditingChapter({ ...editingChapter, content: e.target.value })}
                             rows={20}
-                            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-pink-500 font-mono text-sm"
+                            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-pink-500 font-mono text-sm whitespace-pre-wrap"
+                            placeholder="Add your chapter content here...
+
+Use multiple line breaks for spacing between paragraphs or dialogue."
                           />
+                          <p className="text-xs text-gray-500 mt-2">
+                            Tip: Use multiple line breaks (press Enter multiple times) to create spacing between paragraphs or dialogue sections.
+                          </p>
                         </div>
                         <div className="flex gap-2">
                           <button
