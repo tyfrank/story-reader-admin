@@ -194,43 +194,63 @@ export default function EditBookPage() {
   };
 
   const parseChapters = (text: string) => {
-    // Split by double newlines (one blank line between chapters)
-    const chapterBlocks = text.split(/\n\s*\n/);
+    // Look for chapter markers and split ONLY at those points
+    // This preserves all spacing within chapters
+    const lines = text.split('\n');
+    const chapters = [];
+    let currentChapter = null;
+    let contentLines = [];
+    const baseNumber = (book?.chapters?.length || 0) + 1;
     
-    const chapters = chapterBlocks.map((block, index) => {
-      const trimmedBlock = block.trim();
-      if (!trimmedBlock) return null;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmedLine = line.trim();
       
-      const lines = trimmedBlock.split('\n');
-      let title = '';
-      let content = trimmedBlock;
-      let chapterNumber = (book?.chapters?.length || 0) + index + 1;
+      // Check if this line is a chapter marker
+      const chapterMatch = trimmedLine.match(/^Chapter\s+(\d+)[:\-\s]*(.*)?$/i);
       
-      // Check if first line looks like a chapter title
-      if (lines.length > 0) {
-        const firstLine = lines[0].trim();
-        // Check for patterns like "Chapter X", "Chapter X: Title", etc.
-        const chapterMatch = firstLine.match(/^Chapter\s+(\d+)[:\-\s]*(.*)?$/i);
-        if (chapterMatch) {
-          const chapterTitle = chapterMatch[2]?.trim();
-          title = chapterTitle || `Chapter ${chapterNumber}`;
-          content = lines.slice(1).join('\n').trim();
-        } else if (firstLine.length < 100 && !firstLine.includes('.')) {
-          // If first line is short and doesn't look like a sentence, treat as title
-          title = firstLine;
-          content = lines.slice(1).join('\n').trim();
-        } else {
-          title = `Chapter ${chapterNumber}`;
+      if (chapterMatch) {
+        // Save previous chapter if exists
+        if (currentChapter && contentLines.length > 0) {
+          currentChapter.content = contentLines.join('\n').trim();
+          if (currentChapter.content) {
+            chapters.push(currentChapter);
+          }
         }
+        
+        // Start new chapter
+        const chapterNum = parseInt(chapterMatch[1]);
+        const chapterTitle = chapterMatch[2]?.trim();
+        currentChapter = {
+          number: chapterNum,
+          title: chapterTitle || `Chapter ${chapterNum}`,
+          content: ''
+        };
+        contentLines = [];
+      } else {
+        // This is content, not a chapter marker
+        // Add it to current chapter content (preserving blank lines)
+        contentLines.push(line);
       }
-      
-      return { 
-        number: chapterNumber, 
-        title, 
-        content 
-      };
-    }).filter(ch => ch !== null && ch.content);
-
+    }
+    
+    // Don't forget the last chapter
+    if (currentChapter && contentLines.length > 0) {
+      currentChapter.content = contentLines.join('\n').trim();
+      if (currentChapter.content) {
+        chapters.push(currentChapter);
+      }
+    }
+    
+    // If no chapters were found with markers, treat entire text as one chapter
+    if (chapters.length === 0 && text.trim()) {
+      chapters.push({
+        number: baseNumber,
+        title: `Chapter ${baseNumber}`,
+        content: text.trim()
+      });
+    }
+    
     return chapters;
   };
 
