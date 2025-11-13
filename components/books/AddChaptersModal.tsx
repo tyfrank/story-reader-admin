@@ -21,6 +21,69 @@ export function AddChaptersModal({ bookId, bookTitle, onClose, onSuccess }: AddC
   const [parsedChapters, setParsedChapters] = useState<any[]>([])
   const [showPreview, setShowPreview] = useState(false)
 
+  const parseChaptersLocally = (text: string) => {
+    const chapters: any[] = []
+    
+    // First, try to detect chapters with # markers (recommended)
+    if (text.includes('#')) {
+      const parts = text.split(/^#(?!#)/gm).filter(part => part.trim())
+      parts.forEach((part, idx) => {
+        const lines = part.trim().split('\n')
+        const title = lines[0].trim()
+        const content = lines.slice(1).join('\n').trim()
+        
+        if (content) {
+          chapters.push({
+            title: title || `Chapter ${startingChapterNumber + idx}`,
+            content: content,
+            chapterNumber: startingChapterNumber + idx,
+            number: startingChapterNumber + idx
+          })
+        }
+      })
+    }
+    
+    // If no # markers, try Chapter X patterns
+    if (chapters.length === 0) {
+      const chapterRegex = /^(?:Chapter|CHAPTER|Chap|Ch\.?)\s+(\d+)[:\-\s]*(.*?)(?=^(?:Chapter|CHAPTER|Chap|Ch\.?)\s+\d+|$)/gims
+      const matches = Array.from(text.matchAll(chapterRegex))
+      
+      if (matches.length > 0) {
+        matches.forEach((match, idx) => {
+          const chapterNum = parseInt(match[1])
+          const titlePart = match[2]?.trim() || ''
+          const startIdx = match.index! + match[0].indexOf('\n')
+          const endIdx = idx < matches.length - 1 ? matches[idx + 1].index! : text.length
+          const content = text.substring(startIdx, endIdx).trim()
+          
+          if (content) {
+            chapters.push({
+              title: titlePart ? `Chapter ${chapterNum}: ${titlePart}` : `Chapter ${chapterNum}`,
+              content: content,
+              chapterNumber: startingChapterNumber + idx,
+              number: startingChapterNumber + idx
+            })
+          }
+        })
+      }
+    }
+    
+    // If still no chapters, split by double newlines
+    if (chapters.length === 0) {
+      const blocks = text.split(/\n\s*\n+/).filter(block => block.trim())
+      blocks.forEach((block, idx) => {
+        chapters.push({
+          title: `Chapter ${startingChapterNumber + idx}`,
+          content: block.trim(),
+          chapterNumber: startingChapterNumber + idx,
+          number: startingChapterNumber + idx
+        })
+      })
+    }
+    
+    return chapters
+  }
+
   const parseChapters = async () => {
     if (!chaptersText.trim()) {
       setMessage('Please enter chapter content')
@@ -30,28 +93,45 @@ export function AddChaptersModal({ bookId, bookTitle, onClose, onSuccess }: AddC
     try {
       const token = localStorage.getItem('adminToken')
       
-      // Parse the chapters
-      const response = await axios.post(
-        `${API_URL}/api/admin/parse-chapters`,
-        { content: chaptersText },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
+      // Try server-side parsing first
+      try {
+        const response = await axios.post(
+          `${API_URL}/api/admin/parse-chapters`,
+          { content: chaptersText },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
           }
-        }
-      )
+        )
 
-      if (response.data.success) {
-        // Adjust chapter numbers based on starting number
-        const adjustedChapters = response.data.data.map((ch: any, idx: number) => ({
-          ...ch,
-          chapterNumber: startingChapterNumber + idx,
-          title: ch.title.replace(/Chapter \d+/i, `Chapter ${startingChapterNumber + idx}`)
-        }))
-        setParsedChapters(adjustedChapters)
+        if (response.data.success && response.data.data.length > 0) {
+          // Adjust chapter numbers based on starting number
+          const adjustedChapters = response.data.data.map((ch: any, idx: number) => ({
+            ...ch,
+            chapterNumber: startingChapterNumber + idx,
+            number: startingChapterNumber + idx,
+            title: ch.title.replace(/Chapter \d+/i, `Chapter ${startingChapterNumber + idx}`)
+          }))
+          setParsedChapters(adjustedChapters)
+          setShowPreview(true)
+          setMessage(`Parsed ${response.data.data.length} chapters successfully!`)
+          return
+        }
+      } catch (serverError) {
+        console.log('Server parsing failed, using local parser')
+      }
+      
+      // Fall back to local parsing
+      const localChapters = parseChaptersLocally(chaptersText)
+      
+      if (localChapters.length > 0) {
+        setParsedChapters(localChapters)
         setShowPreview(true)
-        setMessage(`Parsed ${response.data.data.length} chapters successfully!`)
+        setMessage(`Parsed ${localChapters.length} chapters successfully!`)
+      } else {
+        setMessage('Could not parse chapters. Please check the format.')
       }
     } catch (error: any) {
       setMessage(`Error parsing chapters: ${error.response?.data?.message || error.message}`)
@@ -70,39 +150,92 @@ export function AddChaptersModal({ bookId, bookTitle, onClose, onSuccess }: AddC
     }
 
     setUploading(true)
-    setMessage('')
+    setMessage('Uploading chapters...')
 
     try {
       const token = localStorage.getItem('adminToken')
       
-      // Add chapters to the book
-      const response = await axios.post(
-        `${API_URL}/api/admin/books/${bookId}/chapters/bulk`,
-        { 
-          chapters: parsedChapters.map(ch => ({
-            title: ch.title,
-            content: ch.content,
-            chapterNumber: ch.chapterNumber || ch.number,
-            coinCost: ch.chapterNumber <= 5 ? 0 : 20,
-            isPremium: ch.chapterNumber > 5
-          }))
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
+      console.log('Submitting chapters:', parsedChapters)
+      
+      // Try bulk upload first
+      try {
+        const response = await axios.post(
+          `${API_URL}/api/admin/books/${bookId}/chapters/bulk`,
+          { 
+            chapters: parsedChapters.map(ch => ({
+              title: ch.title,
+              content: ch.content,
+              chapterNumber: ch.chapterNumber || ch.number,
+              coinCost: (ch.chapterNumber || ch.number) <= 5 ? 0 : 20,
+              isPremium: (ch.chapterNumber || ch.number) > 5
+            }))
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        )
+
+        if (response.data.success) {
+          setMessage(`Successfully added ${response.data.data.length} chapters!`)
+          setTimeout(() => {
+            onSuccess()
+            onClose()
+          }, 1500)
+          return
+        }
+      } catch (bulkError: any) {
+        console.log('Bulk upload failed, trying individual uploads:', bulkError.message)
+        
+        // Fall back to individual uploads
+        let successCount = 0
+        let failedChapters: string[] = []
+        
+        for (const chapter of parsedChapters) {
+          try {
+            await axios.post(
+              `${API_URL}/api/admin/books/${bookId}/chapters`,
+              {
+                title: chapter.title,
+                content: chapter.content,
+                chapterNumber: chapter.chapterNumber || chapter.number,
+                coinCost: (chapter.chapterNumber || chapter.number) <= 5 ? 0 : 20,
+                isPremium: (chapter.chapterNumber || chapter.number) > 5
+              },
+              {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                }
+              }
+            )
+            successCount++
+            setMessage(`Uploaded ${successCount}/${parsedChapters.length} chapters...`)
+          } catch (err: any) {
+            console.error(`Failed to upload chapter ${chapter.chapterNumber}:`, err)
+            failedChapters.push(chapter.title)
           }
         }
-      )
-
-      if (response.data.success) {
-        setMessage(`Successfully added ${response.data.data.length} chapters!`)
-        setTimeout(() => {
-          onSuccess()
-          onClose()
-        }, 1500)
+        
+        if (successCount === parsedChapters.length) {
+          setMessage(`Successfully added all ${successCount} chapters!`)
+        } else if (successCount > 0) {
+          setMessage(`Added ${successCount} chapters. Failed: ${failedChapters.join(', ')}`)
+        } else {
+          throw new Error('Failed to upload any chapters')
+        }
+        
+        if (successCount > 0) {
+          setTimeout(() => {
+            onSuccess()
+            onClose()
+          }, 1500)
+        }
       }
     } catch (error: any) {
+      console.error('Chapter upload error:', error)
       setMessage(`Error: ${error.response?.data?.message || error.message}`)
     } finally {
       setUploading(false)
