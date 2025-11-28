@@ -45,7 +45,7 @@ export function AddChaptersModal({ bookId, bookTitle, onClose, onSuccess }: AddC
     
     // If no # markers, try Chapter X patterns
     if (chapters.length === 0) {
-      const chapterRegex = /^(?:Chapter|CHAPTER|Chap|Ch\.?)\s+(\d+)[:\-\s]*(.*?)(?=^(?:Chapter|CHAPTER|Chap|Ch\.?)\s+\d+|$)/gims
+      const chapterRegex = /^(?:Chapter|CHAPTER|Chap|Ch\.?)\s+(\d+)[:\-\s]*(.*?)(?=^(?:Chapter|CHAPTER|Chap|Ch\.?)\s+\d+|$)/gim
       const matches = Array.from(text.matchAll(chapterRegex))
       
       if (matches.length > 0) {

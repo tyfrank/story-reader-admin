@@ -1168,31 +1168,31 @@ export default function BooksPage() {
           </div>
         )}
       </div>
+      
+      {/* Add Chapters Modal */}
+      {selectedBookForChapters && (
+        <AddChaptersModal
+          bookId={selectedBookForChapters.id}
+          bookTitle={selectedBookForChapters.title}
+          onClose={() => setSelectedBookForChapters(null)}
+          onSuccess={() => {
+            fetchBooks()
+            setSelectedBookForChapters(null)
+          }}
+        />
+      )}
+      
+      {/* Chapter Manager Modal */}
+      {selectedBookForManager && (
+        <ChapterManager
+          bookId={selectedBookForManager.id}
+          bookTitle={selectedBookForManager.title}
+          onClose={() => {
+            setSelectedBookForManager(null)
+            fetchBooks() // Refresh to update chapter counts
+          }}
+        />
+      )}
     </AdminLayout>
-    
-    {/* Add Chapters Modal */}
-    {selectedBookForChapters && (
-      <AddChaptersModal
-        bookId={selectedBookForChapters.id}
-        bookTitle={selectedBookForChapters.title}
-        onClose={() => setSelectedBookForChapters(null)}
-        onSuccess={() => {
-          fetchBooks()
-          setSelectedBookForChapters(null)
-        }}
-      />
-    )}
-    
-    {/* Chapter Manager Modal */}
-    {selectedBookForManager && (
-      <ChapterManager
-        bookId={selectedBookForManager.id}
-        bookTitle={selectedBookForManager.title}
-        onClose={() => {
-          setSelectedBookForManager(null)
-          fetchBooks() // Refresh to update chapter counts
-        }}
-      />
-    )}
   )
 }
