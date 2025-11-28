@@ -194,22 +194,21 @@ export default function EditBookPage() {
   };
 
   const parseChapters = (text: string) => {
-    // Look for chapter markers and split ONLY at those points
-    // This preserves all spacing within chapters
+    // Parse chapters using # markers
+    // Each chapter starts with a line beginning with #
     const lines = text.split('\n');
     const chapters = [];
     let currentChapter = null;
     let contentLines = [];
     const baseNumber = (book?.chapters?.length || 0) + 1;
+    let chapterCount = baseNumber - 1;
     
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const trimmedLine = line.trim();
       
-      // Check if this line is a chapter marker
-      const chapterMatch = trimmedLine.match(/^Chapter\s+(\d+)[:\-\s]*(.*)?$/i);
-      
-      if (chapterMatch) {
+      // Check if this line is a # chapter marker
+      if (trimmedLine.startsWith('#') && !trimmedLine.startsWith('##')) {
         // Save previous chapter if exists
         if (currentChapter && contentLines.length > 0) {
           currentChapter.content = contentLines.join('\n').trim();
@@ -219,8 +218,19 @@ export default function EditBookPage() {
         }
         
         // Start new chapter
-        const chapterNum = parseInt(chapterMatch[1]);
-        const chapterTitle = chapterMatch[2]?.trim();
+        chapterCount++;
+        const title = trimmedLine.replace(/^#\s*/, '').trim();
+        
+        // Extract chapter number if present in title
+        const numberMatch = title.match(/^Chapter\s+(\d+)[:\-\s]*(.*)?$/i);
+        let chapterNum = chapterCount;
+        let chapterTitle = title;
+        
+        if (numberMatch) {
+          chapterNum = parseInt(numberMatch[1]);
+          chapterTitle = numberMatch[2]?.trim() || `Chapter ${chapterNum}`;
+        }
+        
         currentChapter = {
           number: chapterNum,
           title: chapterTitle || `Chapter ${chapterNum}`,
@@ -228,8 +238,7 @@ export default function EditBookPage() {
         };
         contentLines = [];
       } else {
-        // This is content, not a chapter marker
-        // Add it to current chapter content (preserving blank lines)
+        // This is content, add it to current chapter
         contentLines.push(line);
       }
     }
@@ -242,13 +251,10 @@ export default function EditBookPage() {
       }
     }
     
-    // If no chapters were found with markers, treat entire text as one chapter
+    // If no chapters were found with # markers, show error
     if (chapters.length === 0 && text.trim()) {
-      chapters.push({
-        number: baseNumber,
-        title: `Chapter ${baseNumber}`,
-        content: text.trim()
-      });
+      alert('No chapters found! Please use # at the start of a line to mark each chapter.\n\nExample:\n# Chapter 1\nContent for chapter 1...\n\n# Chapter 2\nContent for chapter 2...');
+      return [];
     }
     
     return chapters;

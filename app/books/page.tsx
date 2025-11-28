@@ -519,62 +519,52 @@ export default function BooksPage() {
   }
 
   const parseChapters = (text: string) => {
-    // Clean up the text first
-    const cleanedText = text.trim()
-    if (!cleanedText) return []
+    // Parse chapters using # markers
+    // Each chapter starts with a line beginning with #
+    const lines = text.split('\n')
+    const chapters = []
+    let currentChapter = null
+    let contentLines = []
     
-    // Try multiple parsing strategies
-    let chapters: { title: string; content: string }[] = []
-    
-    // Strategy 1: Look for explicit chapter markers (Chapter 1, Chapter 2, etc.)
-    const chapterRegex = /^(?:Chapter|CHAPTER|Chap|Ch\.?)\s+(\d+)[:\-\s]*(.*?)$/gmi
-    const chapterMatches = Array.from(cleanedText.matchAll(chapterRegex))
-    
-    if (chapterMatches.length > 0) {
-      // Parse based on chapter markers
-      for (let i = 0; i < chapterMatches.length; i++) {
-        const match = chapterMatches[i]
-        const chapterNum = match[1]
-        const chapterTitle = match[2]?.trim() || ''
-        const startIdx = match.index! + match[0].length
-        const endIdx = i < chapterMatches.length - 1 ? chapterMatches[i + 1].index : cleanedText.length
-        
-        const content = cleanedText.substring(startIdx, endIdx).trim()
-        const title = chapterTitle ? `Chapter ${chapterNum}: ${chapterTitle}` : `Chapter ${chapterNum}`
-        
-        if (content) {
-          chapters.push({ title, content })
-        }
-      }
-    } else {
-      // Strategy 2: Split by double newlines (blank lines)
-      const blocks = cleanedText.split(/\n\s*\n+/)
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      const trimmedLine = line.trim()
       
-      chapters = blocks.map((block, index) => {
-        const trimmedBlock = block.trim()
-        if (!trimmedBlock) return null
-        
-        const lines = trimmedBlock.split('\n')
-        let title = `Chapter ${index + 1}`
-        let content = trimmedBlock
-        
-        // Check if first line could be a title
-        if (lines.length > 1) {
-          const firstLine = lines[0].trim()
-          // If first line is short and doesn't end with punctuation, treat as title
-          if (firstLine.length < 100 && !firstLine.match(/[.!?]$/)) {
-            title = firstLine
-            content = lines.slice(1).join('\n').trim()
+      // Check if this line is a # chapter marker
+      if (trimmedLine.startsWith('#') && !trimmedLine.startsWith('##')) {
+        // Save previous chapter if exists
+        if (currentChapter && contentLines.length > 0) {
+          currentChapter.content = contentLines.join('\n').trim()
+          if (currentChapter.content) {
+            chapters.push(currentChapter)
           }
         }
         
-        return content ? { title, content } : null
-      }).filter((ch): ch is { title: string; content: string } => ch !== null)
+        // Start new chapter
+        const title = trimmedLine.replace(/^#\s*/, '').trim()
+        currentChapter = {
+          title: title || `Chapter ${chapters.length + 1}`,
+          content: ''
+        }
+        contentLines = []
+      } else {
+        // This is content, add it to current chapter
+        contentLines.push(line)
+      }
     }
     
-    // If still no chapters parsed, treat entire text as one chapter
-    if (chapters.length === 0 && cleanedText.length > 0) {
-      chapters = [{ title: 'Chapter 1', content: cleanedText }]
+    // Don't forget the last chapter
+    if (currentChapter && contentLines.length > 0) {
+      currentChapter.content = contentLines.join('\n').trim()
+      if (currentChapter.content) {
+        chapters.push(currentChapter)
+      }
+    }
+    
+    // If no chapters were found with # markers, show error
+    if (chapters.length === 0 && text.trim()) {
+      alert('No chapters found! Please use # at the start of a line to mark each chapter.\n\nExample:\n# Chapter 1\nContent for chapter 1...\n\n# Chapter 2\nContent for chapter 2...')
+      return []
     }
     
     return chapters
