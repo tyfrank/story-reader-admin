@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
 import axios from 'axios'
 
@@ -16,6 +16,29 @@ interface AddChaptersModalProps {
 export function AddChaptersModal({ bookId, bookTitle, onClose, onSuccess }: AddChaptersModalProps) {
   const [chaptersText, setChaptersText] = useState('')
   const [startingChapterNumber, setStartingChapterNumber] = useState(1)
+  const [loadingExisting, setLoadingExisting] = useState(true)
+
+  // Fetch existing chapter count to auto-set starting number
+  useEffect(() => {
+    const fetchExistingChapters = async () => {
+      try {
+        const token = localStorage.getItem('adminToken')
+        const response = await axios.get(
+          `${API_URL}/api/admin/books/${bookId}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        const chapters = response.data?.data?.chapters || response.data?.chapters || []
+        const maxChapterNum = chapters.reduce((max: number, ch: any) =>
+          Math.max(max, ch.chapterNumber || 0), 0)
+        setStartingChapterNumber(maxChapterNum + 1)
+      } catch (error) {
+        console.error('Failed to fetch existing chapters:', error)
+      } finally {
+        setLoadingExisting(false)
+      }
+    }
+    fetchExistingChapters()
+  }, [bookId])
   const [uploading, setUploading] = useState(false)
   const [message, setMessage] = useState('')
   const [parsedChapters, setParsedChapters] = useState<any[]>([])
