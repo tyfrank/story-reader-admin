@@ -12,6 +12,7 @@ import {
 import { AdminLayout } from '@/components/layout/AdminLayout'
 import { AddChaptersModal } from '@/components/books/AddChaptersModal'
 import { ChapterManager } from '@/components/books/ChapterManager'
+import { GENRES, DEFAULT_GENRE } from '@/utils/genres'
 
 interface Book {
   id: string
@@ -64,7 +65,7 @@ export default function BooksPage() {
     title: '',
     author: '',
     description: '',
-    genre: 'WEREWOLF',
+    genre: DEFAULT_GENRE as string,
     spiceRating: 0,
     tags: '',
     coverImage: '',
@@ -510,7 +511,7 @@ export default function BooksPage() {
       title: '',
       author: '',
       description: '',
-      genre: 'WEREWOLF',
+      genre: DEFAULT_GENRE,
       spiceRating: 0,
       tags: '',
       coverImage: '',
@@ -847,7 +848,7 @@ export default function BooksPage() {
                         title: book.title,
                         author: book.authorName || book.author || '',
                         description: book.description || '',
-                        genre: book.genre?.[0] || 'WEREWOLF',
+                        genre: book.genre?.[0] || DEFAULT_GENRE,
                         spiceRating: book.spiceRating || 0,
                         tags: Array.isArray(book.tags) ? book.tags.join(', ') : '',
                         coverImage: book.coverUrl || book.coverImage || '',
@@ -1002,9 +1003,9 @@ export default function BooksPage() {
                       onChange={(e) => setUploadForm(prev => ({ ...prev, genre: e.target.value }))}
                       className="input-field"
                     >
-                      <option value="WEREWOLF">Werewolf</option>
-                      <option value="VAMPIRE">Vampire</option>
-                      <option value="BILLIONAIRE_CEO">Billionaire CEO</option>
+                      {GENRES.map((g) => (
+                        <option key={g.value} value={g.value}>{g.label}</option>
+                      ))}
                     </select>
                   </div>
                   <div>

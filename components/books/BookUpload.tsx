@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Upload, LogIn, LogOut } from 'lucide-react'
 import axios from 'axios'
+import { GENRES } from '@/utils/genres'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app'
 
@@ -319,11 +320,9 @@ export function BookUpload() {
               required
             >
               <option value="">Select genre</option>
-              <option value="romance">Romance</option>
-              <option value="fantasy">Fantasy</option>
-              <option value="mystery">Mystery</option>
-              <option value="thriller">Thriller</option>
-              <option value="scifi">Sci-Fi</option>
+              {GENRES.map((g) => (
+                <option key={g.value} value={g.value}>{g.label}</option>
+              ))}
             </select>
           </div>
 
