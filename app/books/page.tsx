@@ -12,6 +12,7 @@ import {
 import { AdminLayout } from '@/components/layout/AdminLayout'
 import { AddChaptersModal } from '@/components/books/AddChaptersModal'
 import { ChapterManager } from '@/components/books/ChapterManager'
+import { GENRES, DEFAULT_GENRE } from '@/utils/genres'
 
 interface Book {
   id: string
@@ -37,6 +38,7 @@ interface Book {
   revenue?: number
   authorId?: string
   status?: string
+  spiceRating?: number
 }
 
 export default function BooksPage() {
@@ -64,7 +66,8 @@ export default function BooksPage() {
     title: '',
     author: '',
     description: '',
-    genre: 'WEREWOLF',
+    genre: DEFAULT_GENRE as string,
+    spiceRating: 0,
     tags: '',
     coverImage: '',
     coverImageFile: null as File | null,
@@ -217,6 +220,7 @@ export default function BooksPage() {
           authorName: uploadForm.author,
           description: uploadForm.description,
           genre: uploadForm.genre,
+          spiceRating: uploadForm.spiceRating,
           tags: uploadForm.tags.split(',').map(tag => tag.trim()).filter(Boolean),
           coverUrl: coverUrl || editingBook.coverUrl || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=300&h=450&fit=crop',
           status: 'PUBLISHED',
@@ -307,6 +311,7 @@ export default function BooksPage() {
         description: uploadForm.description,
         maturityRating: 'ADULT',
         genre: uploadForm.genre,
+        spiceRating: uploadForm.spiceRating,
         tags: uploadForm.tags.split(',').map(tag => tag.trim()).filter(Boolean),
         coverUrl: coverUrl || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=300&h=450&fit=crop',
         status: 'PUBLISHED',
@@ -527,7 +532,8 @@ export default function BooksPage() {
       title: '',
       author: '',
       description: '',
-      genre: 'WEREWOLF',
+      genre: DEFAULT_GENRE,
+      spiceRating: 0,
       tags: '',
       coverImage: '',
       coverImageFile: null,
@@ -832,6 +838,11 @@ export default function BooksPage() {
                   <p>{book._count?.chapters || book.chapters?.length || 0} chapters</p>
                   <p>{book._count?.favorites || book.reads || 0} reads</p>
                   {book.revenue && <p>${book.revenue.toFixed(2)} revenue</p>}
+                  {book.spiceRating ? (
+                    <p>{'🌶️'.repeat(book.spiceRating)} {book.spiceRating}/5</p>
+                  ) : (
+                    <p className="text-gray-400">No spice rating</p>
+                  )}
                 </div>
 
                 <div className="flex gap-2 pt-2">
@@ -897,7 +908,8 @@ export default function BooksPage() {
                         title: book.title,
                         author: book.authorName || book.author || '',
                         description: book.description || '',
-                        genre: book.genre?.[0] || 'WEREWOLF',
+                        genre: book.genre?.[0] || DEFAULT_GENRE,
+                        spiceRating: book.spiceRating || 0,
                         tags: Array.isArray(book.tags) ? book.tags.join(', ') : '',
                         coverImage: book.coverUrl || book.coverImage || '',
                         coverImageFile: null,
@@ -1043,17 +1055,48 @@ export default function BooksPage() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium mb-1">Genre</label>
-                  <select
-                    value={uploadForm.genre}
-                    onChange={(e) => setUploadForm(prev => ({ ...prev, genre: e.target.value }))}
-                    className="input-field"
-                  >
-                    <option value="WEREWOLF">Werewolf</option>
-                    <option value="VAMPIRE">Vampire</option>
-                    <option value="BILLIONAIRE_CEO">Billionaire CEO</option>
-                  </select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Genre</label>
+                    <select
+                      value={uploadForm.genre}
+                      onChange={(e) => setUploadForm(prev => ({ ...prev, genre: e.target.value }))}
+                      className="input-field"
+                    >
+                      {GENRES.map((g) => (
+                        <option key={g.value} value={g.value}>{g.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Spice Rating</label>
+                    <div className="flex items-center gap-1 mt-2">
+                      {[1, 2, 3, 4, 5].map((level) => (
+                        <button
+                          key={level}
+                          type="button"
+                          onClick={() => setUploadForm(prev => ({
+                            ...prev,
+                            spiceRating: prev.spiceRating === level ? 0 : level
+                          }))}
+                          className={`text-2xl transition-all hover:scale-110 ${
+                            level <= uploadForm.spiceRating
+                              ? 'opacity-100 drop-shadow-md'
+                              : 'opacity-30 grayscale'
+                          }`}
+                          title={uploadForm.spiceRating === level ? 'Click to unrate' : `Spice level ${level}`}
+                        >
+                          🌶️
+                        </button>
+                      ))}
+                      {uploadForm.spiceRating > 0 && (
+                        <span className="text-xs text-gray-500 ml-2">{uploadForm.spiceRating}/5</span>
+                      )}
+                      {uploadForm.spiceRating === 0 && (
+                        <span className="text-xs text-gray-400 ml-2">Unrated</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="relative">
