@@ -36,6 +36,7 @@ interface Book {
   reads?: number
   revenue?: number
   authorId?: string
+  status?: string
 }
 
 export default function BooksPage() {
@@ -202,6 +203,15 @@ export default function BooksPage() {
       
       // If editing, update the existing book
       if (editingBook) {
+        // Check chapters for personalization tags (including new chapters being added)
+        const hasPersonalizationTags = uploadForm.chapters.some(ch => 
+          ch.content.includes('[NARRATOR]') || 
+          ch.content.includes('[{{USERNAME}}]') ||
+          ch.content.includes('[{{') ||
+          ch.content.includes('{{userName}}') ||
+          ch.content.includes('{{name}}')
+        )
+        
         const updateData = {
           title: uploadForm.title,
           authorName: uploadForm.author,
@@ -210,7 +220,8 @@ export default function BooksPage() {
           tags: uploadForm.tags.split(',').map(tag => tag.trim()).filter(Boolean),
           coverUrl: coverUrl || editingBook.coverUrl || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=300&h=450&fit=crop',
           status: 'PUBLISHED',
-          isPublished: true
+          isPublished: true,
+          isPersonalized: hasPersonalizationTags || editingBook.isPersonalized // Keep existing or update based on new chapters
         }
         
         const response = await fetch(
@@ -280,6 +291,15 @@ export default function BooksPage() {
       }
       
       // Try to create book WITH chapters first (like the old admin)
+      // Check if any chapters have personalization tags
+      const hasPersonalizationTags = uploadForm.chapters.some(ch => 
+        ch.content.includes('[NARRATOR]') || 
+        ch.content.includes('[{{USERNAME}}]') ||
+        ch.content.includes('[{{') ||
+        ch.content.includes('{{userName}}') ||
+        ch.content.includes('{{name}}')
+      )
+      
       // Only fallback to separate upload if it fails
       const bookData = {
         title: uploadForm.title,
@@ -290,6 +310,7 @@ export default function BooksPage() {
         tags: uploadForm.tags.split(',').map(tag => tag.trim()).filter(Boolean),
         coverUrl: coverUrl || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=300&h=450&fit=crop',
         status: 'PUBLISHED',
+        isPersonalized: hasPersonalizationTags, // Mark as personalized if tags found
         // Include first 10 chapters with the book creation
         chapters: uploadForm.chapters.slice(0, 10).map((ch, idx) => ({
           title: ch.title || `Chapter ${idx + 1}`,
@@ -760,12 +781,51 @@ export default function BooksPage() {
                     {book.uploadedBy || 'ADMIN'}
                   </span>
                   <span className={`px-2 py-1 rounded-full ${
-                    book.isPublished 
-                      ? 'bg-green-100 text-green-700' 
+                    book.isPublished
+                      ? 'bg-green-100 text-green-700'
                       : 'bg-gray-100 text-gray-700'
                   }`}>
                     {book.isPublished ? 'Published' : 'Draft'}
                   </span>
+                  <select
+                    value={book.status || 'ONGOING'}
+                    onChange={async (e) => {
+                      const newStatus = e.target.value
+                      try {
+                        const token = localStorage.getItem('adminToken')
+                        const response = await fetch(
+                          `${process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app'}/api/books/${book.id}/status`,
+                          {
+                            method: 'PATCH',
+                            headers: {
+                              'Authorization': `Bearer ${token}`,
+                              'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ status: newStatus })
+                          }
+                        )
+                        if (response.ok) {
+                          setBooks(prev => prev.map(b => b.id === book.id ? { ...b, status: newStatus } : b))
+                        } else {
+                          alert('Failed to update status')
+                        }
+                      } catch (error) {
+                        console.error('Failed to update status:', error)
+                        alert('Failed to update status')
+                      }
+                    }}
+                    className={`px-2 py-1 rounded-full text-xs font-medium border-0 cursor-pointer ${
+                      book.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' :
+                      book.status === 'HIATUS' ? 'bg-yellow-100 text-yellow-700' :
+                      book.status === 'DRAFT' ? 'bg-gray-100 text-gray-700' :
+                      'bg-blue-100 text-blue-700'
+                    }`}
+                  >
+                    <option value="ONGOING">Ongoing</option>
+                    <option value="COMPLETED">Completed</option>
+                    <option value="HIATUS">Hiatus</option>
+                    <option value="DRAFT">Draft</option>
+                  </select>
                 </div>
 
                 <div className="text-xs text-gray-500 space-y-1">

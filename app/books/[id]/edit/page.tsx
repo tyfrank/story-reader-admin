@@ -472,6 +472,22 @@ export default function EditBookPage() {
                     className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-pink-500"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                  <select
+                    value={bookMetadata.status || 'ONGOING'}
+                    onChange={(e) => setBookMetadata({ ...bookMetadata, status: e.target.value })}
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-pink-500 bg-white"
+                  >
+                    <option value="ONGOING">Ongoing</option>
+                    <option value="COMPLETED">Completed</option>
+                    <option value="HIATUS">Hiatus</option>
+                    <option value="DRAFT">Draft</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Completed books won't show the "Ongoing" badge in the app
+                  </p>
+                </div>
                 <button
                   onClick={handleSaveMetadata}
                   disabled={saving}
