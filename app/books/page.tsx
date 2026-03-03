@@ -39,6 +39,7 @@ interface Book {
   authorId?: string
   status?: string
   spiceRating?: number
+  isPersonalized?: boolean
 }
 
 export default function BooksPage() {
