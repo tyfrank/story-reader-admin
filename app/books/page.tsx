@@ -71,6 +71,8 @@ export default function BooksPage() {
     author: '',
     description: '',
     genre: DEFAULT_GENRE as string,
+    status: 'DRAFT',
+    isPublished: false,
     spiceRating: 0,
     tags: '',
     coverImage: '',
@@ -228,8 +230,8 @@ export default function BooksPage() {
           spiceRating: uploadForm.spiceRating,
           tags: uploadForm.tags.split(',').map(tag => tag.trim()).filter(Boolean),
           coverUrl: coverUrl || editingBook.coverUrl || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=300&h=450&fit=crop',
-          status: editingBook.status || 'ONGOING',
-          isPublished: editingBook.isPublished,
+          status: uploadForm.status,
+          isPublished: uploadForm.isPublished,
           isPersonalized: hasPersonalizationTags || editingBook.isPersonalized // Keep existing or update based on new chapters
         }
         
@@ -320,7 +322,8 @@ export default function BooksPage() {
         spiceRating: uploadForm.spiceRating,
         tags: uploadForm.tags.split(',').map(tag => tag.trim()).filter(Boolean),
         coverUrl: coverUrl || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=300&h=450&fit=crop',
-        status: 'PUBLISHED',
+        status: uploadForm.status,
+        isPublished: uploadForm.isPublished,
         isPersonalized: hasPersonalizationTags, // Mark as personalized if tags found
         // Include first 10 chapters with the book creation
         chapters: uploadForm.chapters.slice(0, 10).map((ch, idx) => ({
@@ -556,6 +559,8 @@ export default function BooksPage() {
       author: '',
       description: '',
       genre: DEFAULT_GENRE,
+      status: 'DRAFT',
+      isPublished: false,
       spiceRating: 0,
       tags: '',
       coverImage: '',
@@ -939,6 +944,8 @@ export default function BooksPage() {
                         author: book.authorName || book.author || '',
                         description: book.description || '',
                         genre: book.genre?.[0] || DEFAULT_GENRE,
+                        status: book.status || 'ONGOING',
+                        isPublished: book.isPublished,
                         spiceRating: book.spiceRating || 0,
                         tags: Array.isArray(book.tags) ? book.tags.join(', ') : '',
                         coverImage: book.coverUrl || book.coverImage || '',
@@ -1126,6 +1133,49 @@ export default function BooksPage() {
                         <span className="text-xs text-gray-400 ml-2">Unrated</span>
                       )}
                     </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Story Status</label>
+                    <select
+                      value={uploadForm.status}
+                      onChange={(e) => {
+                        const status = e.target.value
+                        setUploadForm(prev => ({
+                          ...prev,
+                          status,
+                          ...(status === 'DRAFT' ? { isPublished: false } : {})
+                        }))
+                      }}
+                      className="input-field"
+                    >
+                      <option value="DRAFT">Draft</option>
+                      <option value="ONGOING">Ongoing</option>
+                      <option value="COMPLETED">Completed</option>
+                      <option value="HIATUS">On Hiatus</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col justify-center">
+                    <label className="flex items-center gap-2 text-sm font-medium">
+                      <input
+                        type="checkbox"
+                        checked={uploadForm.isPublished}
+                        disabled={uploadForm.status === 'DRAFT'}
+                        onChange={(e) => setUploadForm(prev => ({
+                          ...prev,
+                          isPublished: e.target.checked
+                        }))}
+                        className="h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500 disabled:opacity-50"
+                      />
+                      Visible to readers
+                    </label>
+                    <p className="mt-1 text-xs text-gray-500">
+                      {uploadForm.status === 'DRAFT'
+                        ? 'Drafts cannot be visible to readers.'
+                        : 'Turn this on only when the book is ready for readers.'}
+                    </p>
                   </div>
                 </div>
 
