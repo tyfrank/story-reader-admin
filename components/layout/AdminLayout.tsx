@@ -126,9 +126,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                   <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
                 )}
               </button>
-              <div className="text-sm text-gray-600">
-                admin@romanceme.com
-              </div>
+              <div className="text-sm text-gray-600">Administrator</div>
             </div>
           </div>
         </header>

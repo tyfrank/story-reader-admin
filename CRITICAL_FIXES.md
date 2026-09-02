@@ -5,9 +5,7 @@
 - The backend is deployed on Railway and connected to GitHub
 
 ## Authentication
-- **Admin Credentials**:
-  - Email: `admin@romanceme.com`
-  - Password: `admin123`
+- **Admin Credentials**: Never store credentials in source control or display them in the portal.
 - **Token**: Must be included in all API calls as `Authorization: Bearer ${token}`
 - **Admin Check**: Backend verifies `request.user.role === 'ADMIN'`
 
@@ -77,16 +75,10 @@ The Prisma schema uses these models:
 - `Chapter` 
 - `Purchase` (not Payment)
 
-### 5. Admin User Creation
-To create/reset admin user, use this endpoint:
-```bash
-curl -X POST https://story-reader-backend-production.up.railway.app/api/init/create-admin -H "Content-Type: application/json" -d '{}'
-```
-
 ## Common Issues & Solutions
 
 ### Issue: "Invalid credentials"
-**Solution**: Admin user might not exist. Create it using the endpoint above.
+**Solution**: Verify the account through the secured backend administration process. Do not add a public account-creation or password-reset endpoint.
 
 ### Issue: "Failed to create book" 
 **Solution**: Check that:
@@ -113,7 +105,7 @@ curl -X POST https://story-reader-backend-production.up.railway.app/api/init/cre
 
 ## Testing Book Upload Locally
 1. Start admin locally: `npm run dev` (runs on port 3001)
-2. Login with admin@romanceme.com / admin123
+2. Log in with an authorized administrator account
 3. Try uploading a book with at least one chapter
 4. Check browser console for errors
 5. Check Railway logs for backend errors

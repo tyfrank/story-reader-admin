@@ -17,9 +17,7 @@ export function Header() {
           <button className="p-2 hover:bg-gray-100 rounded-full">
             <User size={20} className="text-gray-600" />
           </button>
-          <div className="text-sm text-gray-600">
-            admin@romanceme.com
-          </div>
+          <div className="text-sm text-gray-600">Administrator</div>
         </div>
       </div>
     </header>

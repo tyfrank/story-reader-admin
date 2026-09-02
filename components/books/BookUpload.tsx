@@ -222,7 +222,7 @@ export function BookUpload() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="admin@romanceme.com"
+                placeholder="Administrator email"
                 required
               />
             </div>
@@ -234,7 +234,7 @@ export function BookUpload() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="admin123"
+                placeholder="Password"
                 required
               />
             </div>
@@ -248,10 +248,9 @@ export function BookUpload() {
             </button>
           </form>
 
-          <div className="mt-4 p-3 bg-gray-100 rounded text-sm text-gray-600">
-            <p>Default credentials:</p>
-            <p className="font-mono">admin@romanceme.com / admin123</p>
-          </div>
+          <p className="mt-4 text-center text-xs text-gray-500">
+            Authorized administrators only
+          </p>
         </div>
       </div>
     )
