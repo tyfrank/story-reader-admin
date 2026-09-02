@@ -33,8 +33,10 @@ interface Book {
   _count?: {
     chapters?: number
     favorites?: number
+    readingProgress?: number
   }
   reads?: number
+  viewCount?: number
   revenue?: number
   authorId?: string
   status?: string
@@ -46,6 +48,7 @@ export default function BooksPage() {
   const router = useRouter()
   const [books, setBooks] = useState<Book[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
   const [filterType, setFilterType] = useState<string>('ALL')
   const [showUploadModal, setShowUploadModal] = useState(false)
@@ -111,6 +114,7 @@ export default function BooksPage() {
   }
 
   const fetchBooks = async () => {
+    setLoadError('')
     try {
       const token = localStorage.getItem('adminToken')
       
@@ -137,12 +141,12 @@ export default function BooksPage() {
         setBooks(data.data || [])
       } else {
         console.error('Failed to fetch books:', response.status)
-        // Even if no books, don't error out - just show empty list
+        setLoadError('Books could not be loaded. Please retry.')
         setBooks([])
       }
     } catch (error) {
       console.error('Failed to fetch books:', error)
-      // Don't fail completely, just show empty list
+      setLoadError('Books could not be loaded. Check your connection and retry.')
       setBooks([])
     } finally {
       setLoading(false)
@@ -224,8 +228,8 @@ export default function BooksPage() {
           spiceRating: uploadForm.spiceRating,
           tags: uploadForm.tags.split(',').map(tag => tag.trim()).filter(Boolean),
           coverUrl: coverUrl || editingBook.coverUrl || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=300&h=450&fit=crop',
-          status: 'PUBLISHED',
-          isPublished: true,
+          status: editingBook.status || 'ONGOING',
+          isPublished: editingBook.isPublished,
           isPersonalized: hasPersonalizationTags || editingBook.isPersonalized // Keep existing or update based on new chapters
         }
         
@@ -253,8 +257,9 @@ export default function BooksPage() {
                 title: chapter.title || `Chapter ${existingChapterCount + i + 1}`,
                 content: chapter.content || '',
                 chapterNumber: existingChapterCount + i + 1,
-                isPremium: false,
-                coinCost: 0
+                isFree: existingChapterCount + i + 1 <= 5,
+                isPremium: existingChapterCount + i + 1 > 5,
+                coinCost: existingChapterCount + i + 1 <= 5 ? 0 : 20
               }
               
               try {
@@ -322,8 +327,9 @@ export default function BooksPage() {
           title: ch.title || `Chapter ${idx + 1}`,
           content: ch.content || '',
           chapterNumber: idx + 1,
-          isPremium: false,
-          coinCost: 0
+          isFree: idx + 1 <= 5,
+          isPremium: idx + 1 > 5,
+          coinCost: idx + 1 <= 5 ? 0 : 20
         }))
       }
       
@@ -342,6 +348,7 @@ export default function BooksPage() {
       if (response.ok) {
         const createdBook = await response.json()
         const bookId = createdBook.data?.id || createdBook.id
+        const failedChapterNumbers: number[] = []
         
         // If there are more than 10 chapters, upload the rest in batches
         if (bookId && uploadForm.chapters.length > 10) {
@@ -358,12 +365,13 @@ export default function BooksPage() {
                 title: chapter.title || `Chapter ${10 + i + j + 1}`,
                 content: chapter.content || '',
                 chapterNumber: 10 + i + j + 1,
-                isPremium: false,
-                coinCost: 0
+                isFree: 10 + i + j + 1 <= 5,
+                isPremium: 10 + i + j + 1 > 5,
+                coinCost: 10 + i + j + 1 <= 5 ? 0 : 20
               }
               
               try {
-                await fetch(
+                const chapterResponse = await fetch(
                   `${process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app'}/api/admin/books/${bookId}/chapters`,
                   {
                     method: 'POST',
@@ -374,8 +382,10 @@ export default function BooksPage() {
                     body: JSON.stringify(chapterData)
                   }
                 )
+                if (!chapterResponse.ok) failedChapterNumbers.push(10 + i + j + 1)
               } catch (err) {
                 console.error(`Error uploading chapter ${10 + i + j + 1}:`, err)
+                failedChapterNumbers.push(10 + i + j + 1)
               }
             }
           }
@@ -384,7 +394,11 @@ export default function BooksPage() {
         await fetchBooks()
         setShowUploadModal(false)
         resetUploadForm()
-        alert(`Book "${uploadForm.title}" uploaded successfully with ${uploadForm.chapters.length} chapters!`)
+        if (failedChapterNumbers.length > 0) {
+          alert(`Book created, but chapters ${failedChapterNumbers.join(', ')} failed to upload. Please retry those chapters before publishing.`)
+        } else {
+          alert(`Book "${uploadForm.title}" uploaded successfully with ${uploadForm.chapters.length} chapters!`)
+        }
       } else if (response.status === 413) {
         // If payload too large, try without chapters
         console.log('Payload too large, creating book without chapters first')
@@ -409,6 +423,7 @@ export default function BooksPage() {
           if (bookId && uploadForm.chapters.length > 0) {
             // Upload ALL chapters in smaller batches
             const batchSize = 10 // Smaller batch size for large chapters
+            const failedChapterNumbers: number[] = []
             
             for (let i = 0; i < uploadForm.chapters.length; i += batchSize) {
               const batch = uploadForm.chapters.slice(i, Math.min(i + batchSize, uploadForm.chapters.length))
@@ -419,12 +434,13 @@ export default function BooksPage() {
                   title: chapter.title || `Chapter ${i + j + 1}`,
                   content: chapter.content || '',
                   chapterNumber: i + j + 1,
-                  isPremium: false,
-                  coinCost: 0
+                  isFree: i + j + 1 <= 5,
+                  isPremium: i + j + 1 > 5,
+                  coinCost: i + j + 1 <= 5 ? 0 : 20
                 }
                 
                 try {
-                  await fetch(
+                  const chapterResponse = await fetch(
                     `${process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app'}/api/admin/books/${bookId}/chapters`,
                     {
                       method: 'POST',
@@ -435,8 +451,10 @@ export default function BooksPage() {
                       body: JSON.stringify(chapterData)
                     }
                   )
+                  if (!chapterResponse.ok) failedChapterNumbers.push(i + j + 1)
                 } catch (err) {
                   console.error(`Error uploading chapter ${i + j + 1}:`, err)
+                  failedChapterNumbers.push(i + j + 1)
                 }
               }
             }
@@ -444,7 +462,11 @@ export default function BooksPage() {
             await fetchBooks()
             setShowUploadModal(false)
             resetUploadForm()
-            alert(`Book "${uploadForm.title}" uploaded successfully with ${uploadForm.chapters.length} chapters!`)
+            if (failedChapterNumbers.length > 0) {
+              alert(`Book created, but chapters ${failedChapterNumbers.join(', ')} failed to upload. Please retry those chapters before publishing.`)
+            } else {
+              alert(`Book "${uploadForm.title}" uploaded successfully with ${uploadForm.chapters.length} chapters!`)
+            }
           }
         } else {
           const errorText = await bookOnlyResponse.text()
@@ -656,7 +678,7 @@ export default function BooksPage() {
   // Filter books
   const filteredBooks = books.filter(book => {
     const matchesSearch = book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (book.author?.toLowerCase() || '').includes(searchTerm.toLowerCase())
+                         (book.authorName?.toLowerCase() || book.author?.toLowerCase() || '').includes(searchTerm.toLowerCase())
     const matchesFilter = filterType === 'ALL' || 
                          (filterType === 'ADMIN' && book.uploadedBy === 'ADMIN') ||
                          (filterType === 'AUTHOR' && book.uploadedBy === 'AUTHOR') ||
@@ -727,6 +749,13 @@ export default function BooksPage() {
         </div>
 
         {/* Filters */}
+        {loadError && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700" role="alert">
+            {loadError}
+            <button onClick={fetchBooks} className="ml-3 font-semibold underline">Retry</button>
+          </div>
+        )}
+
         <div className="card">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1">
@@ -837,7 +866,7 @@ export default function BooksPage() {
 
                 <div className="text-xs text-gray-500 space-y-1">
                   <p>{book._count?.chapters || book.chapters?.length || 0} chapters</p>
-                  <p>{book._count?.favorites || book.reads || 0} reads</p>
+                  <p>{book.viewCount || 0} views</p>
                   {book.revenue && <p>${book.revenue.toFixed(2)} revenue</p>}
                   {book.spiceRating ? (
                     <p>{'🌶️'.repeat(book.spiceRating)} {book.spiceRating}/5</p>
@@ -1180,7 +1209,7 @@ export default function BooksPage() {
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 bg-gray-50">
                   <h3 className="font-medium mb-2">Bulk Chapter Upload</h3>
                   <p className="text-xs text-gray-600 mb-3">
-                    Paste all chapters below. Separate each chapter with one blank line.
+                    Paste all chapters below. Start each chapter title with # on its own line.
                     Format: Chapter 1: Title<br/>Content...<br/><br/>Chapter 2: Title<br/>Content...
                   </p>
                   <textarea

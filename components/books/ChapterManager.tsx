@@ -14,6 +14,7 @@ interface Chapter {
   wordCount?: number
   isFree?: boolean
   price?: number
+  coinCost?: number
 }
 
 interface ChapterManagerProps {
@@ -195,7 +196,7 @@ export function ChapterManager({ bookId, bookTitle, onClose }: ChapterManagerPro
                           </div>
                           <div className="text-sm text-gray-600 mt-1">
                             {chapter.wordCount || chapter.content?.split(/\s+/).length || 0} words
-                            {chapter.isFree ? ' • Free' : ` • ${chapter.price || 20} coins`}
+                            {chapter.isFree ? ' • Free' : ` • ${chapter.coinCost ?? chapter.price ?? 20} coins`}
                           </div>
                           
                           {showContent === chapter.id ? (
