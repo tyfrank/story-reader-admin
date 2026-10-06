@@ -6,6 +6,7 @@ import {
   Calendar, Mail, FileText, Award,
   ChevronLeft, ChevronRight
 } from 'lucide-react'
+import { fetchApplications as loadApplications, applicationApiBase } from '@/lib/authorApplications'
 import { AdminLayout } from '@/components/layout/AdminLayout'
 
 interface AuthorApplication {
@@ -13,12 +14,14 @@ interface AuthorApplication {
   firstName: string
   lastName: string
   email: string
-  status: 'PENDING' | 'APPROVED' | 'REJECTED'
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'REVIEWING' | 'INTERVIEW' | 'WAITLIST'
   submittedAt: string
   experience?: string
   genres?: string[]
   writingSample?: string
   portfolio?: string
+  motivation?: string
+  expectedFrequency?: string
   socialMedia?: string
 }
 
@@ -30,6 +33,9 @@ export default function ApplicationsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
+  const [loadError, setLoadError] = useState('')
+  const [updating, setUpdating] = useState(false)
+  useEffect(() => { setCurrentPage(1) }, [searchTerm, statusFilter])
 
   useEffect(() => {
     fetchApplications()
@@ -38,82 +44,34 @@ export default function ApplicationsPage() {
   const fetchApplications = async () => {
     try {
       const token = localStorage.getItem('adminToken')
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app'}/api/author-applications`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
-      )
-      
-      if (response.ok) {
-        const data = await response.json()
-        setApplications(data.data || [])
-      }
+      setLoadError('')
+      setApplications(await loadApplications(token))
     } catch (error) {
-      console.error('Failed to fetch applications:', error)
+      setLoadError(error instanceof Error ? error.message : 'Could not load applications.')
     } finally {
       setLoading(false)
     }
   }
 
   const handleStatusUpdate = async (appId: string, newStatus: 'APPROVED' | 'REJECTED') => {
+    if (updating) return
+    setUpdating(true)
     try {
       const token = localStorage.getItem('adminToken')
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app'}/api/author-applications/${appId}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ status: newStatus })
-        }
-      )
-
-      if (response.ok) {
-        // Update local state
-        setApplications(prev => prev.map(app => 
-          app.id === appId ? { ...app, status: newStatus } : app
-        ))
-        
-        // If approved, create author account
-        if (newStatus === 'APPROVED') {
-          const app = applications.find(a => a.id === appId)
-          if (app) {
-            await createAuthorAccount(app)
-          }
-        }
-        
-        setSelectedApp(null)
-        alert(`Application ${newStatus.toLowerCase()}!`)
+      const response = await fetch(`${applicationApiBase}/api/author-applications/${appId}/status`, {
+        method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus === 'APPROVED' ? 'ACCEPTED' : newStatus })
+      })
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.message || data.error || 'Could not update the application.')
       }
+      await fetchApplications()
+      setSelectedApp(null)
+      alert(`Application ${newStatus.toLowerCase()}!`)
     } catch (error) {
-      console.error('Failed to update application:', error)
-      alert('Failed to update application status')
-    }
-  }
-
-  const createAuthorAccount = async (app: AuthorApplication) => {
-    try {
-      const token = localStorage.getItem('adminToken')
-      await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app'}/api/auth/create-author`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            email: app.email,
-            firstName: app.firstName,
-            lastName: app.lastName,
-            password: Math.random().toString(36).slice(-8) // Temp password
-          })
-        }
-      )
-    } catch (error) {
-      console.error('Failed to create author account:', error)
-    }
+      alert(error instanceof Error ? error.message : 'Failed to update application status')
+    } finally { setUpdating(false) }
   }
 
   // Filter applications
@@ -151,8 +109,11 @@ export default function ApplicationsPage() {
           <p className="text-gray-600 mt-1">Review and manage author applications</p>
         </div>
 
+        {loadError && <div role="alert" className="bg-red-50 p-4 text-red-800 rounded">
+          {loadError} <button onClick={fetchApplications} className="underline ml-2">Retry</button>
+        </div>}
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {!loadError && <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-gradient-to-br from-yellow-400 to-orange-500 p-4 rounded-lg text-white">
             <p className="text-sm opacity-90">Pending Review</p>
             <p className="text-2xl font-bold">
@@ -175,7 +136,7 @@ export default function ApplicationsPage() {
             <p className="text-sm opacity-90">Total Applications</p>
             <p className="text-2xl font-bold">{applications.length}</p>
           </div>
-        </div>
+        </div>}
 
         {/* Filters */}
         <div className="card">
@@ -201,6 +162,9 @@ export default function ApplicationsPage() {
               <option value="PENDING">Pending</option>
               <option value="APPROVED">Approved</option>
               <option value="REJECTED">Rejected</option>
+              <option value="REVIEWING">Reviewing</option>
+              <option value="INTERVIEW">Interview</option>
+              <option value="WAITLIST">Waitlist</option>
             </select>
           </div>
         </div>
@@ -245,14 +209,14 @@ export default function ApplicationsPage() {
                         {app.status === 'PENDING' && (
                           <>
                             <button
-                              onClick={() => handleStatusUpdate(app.id, 'APPROVED')}
+                              disabled={updating} onClick={() => handleStatusUpdate(app.id, 'APPROVED')}
                               className="p-1 hover:bg-green-100 rounded"
                               title="Approve"
                             >
                               <Check size={18} className="text-green-600" />
                             </button>
                             <button
-                              onClick={() => handleStatusUpdate(app.id, 'REJECTED')}
+                              disabled={updating} onClick={() => handleStatusUpdate(app.id, 'REJECTED')}
                               className="p-1 hover:bg-red-100 rounded"
                               title="Reject"
                             >
@@ -369,16 +333,24 @@ export default function ApplicationsPage() {
                   </div>
                 )}
 
+                {[
+                  ['Motivation and Writing Goals', selectedApp.motivation],
+                  ['Publishing Frequency', selectedApp.expectedFrequency],
+                  ['Platforms / Social Media', selectedApp.socialMedia],
+                  ['Portfolio', selectedApp.portfolio],
+                ].filter(([, value]) => value).map(([label, value]) => (
+                  <div key={label}><h3 className="font-semibold text-gray-700 mb-2">{label}</h3><p className="whitespace-pre-wrap break-words">{value}</p></div>
+                ))}
                 {selectedApp.status === 'PENDING' && (
                   <div className="flex gap-3 pt-4 border-t">
                     <button
-                      onClick={() => handleStatusUpdate(selectedApp.id, 'APPROVED')}
+                      disabled={updating} onClick={() => handleStatusUpdate(selectedApp.id, 'APPROVED')}
                       className="btn-primary flex-1"
                     >
                       Approve Application
                     </button>
                     <button
-                      onClick={() => handleStatusUpdate(selectedApp.id, 'REJECTED')}
+                      disabled={updating} onClick={() => handleStatusUpdate(selectedApp.id, 'REJECTED')}
                       className="btn-secondary flex-1"
                     >
                       Reject Application

@@ -1,5 +1,6 @@
 'use client'
 
+import { fetchApplications } from '@/lib/authorApplications'
 import { useState, useEffect } from 'react'
 import { 
   Users, BookOpen, DollarSign, TrendingUp, 
@@ -29,11 +30,7 @@ export default function DashboardPage() {
       }
 
       // Fetch recent author applications
-      const appsRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app'}/api/author-applications?limit=5`, { headers })
-      if (appsRes.ok) {
-        const appsData = await appsRes.json()
-        setRecentApplications(appsData.data || [])
-      }
+      setRecentApplications(await fetchApplications(token, 5))
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error)
     } finally {

@@ -1,5 +1,6 @@
 'use client'
 
+import { applicationApiBase } from '@/lib/authorApplications'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -34,12 +35,12 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const checkNotifications = async () => {
     try {
       const token = localStorage.getItem('adminToken')
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://story-reader-backend-production.up.railway.app'}/api/author-applications`, {
+      const response = await fetch(`${applicationApiBase}/api/author-applications/all?status=PENDING&limit=1`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       if (response.ok) {
         const data = await response.json()
-        const pending = data.data?.filter((app: any) => app.status === 'PENDING').length || 0
+        const pending = data.total || 0
         setNotifications(pending)
       }
     } catch (error) {
