@@ -21,6 +21,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     { id: 'books', label: 'Book Management', icon: BookOpen, path: '/books' },
     { id: 'users', label: 'User Management', icon: Users, path: '/users' },
     { id: 'authors', label: 'Author Management', icon: UserCheck, path: '/authors' },
+    { id: 'reading', label: 'Reading Activity', icon: TrendingUp, path: '/reading' },
     { id: 'revenue', label: 'Revenue & Analytics', icon: TrendingUp, path: '/revenue' },
     { id: 'moderation', label: 'Content Moderation', icon: Shield, path: '/moderation' },
     { id: 'settings', label: 'Settings', icon: Settings, path: '/settings' },

@@ -38,6 +38,7 @@ interface Comment {
 }
 
 export default function ModerationPage() {
+  const [error, setError] = useState('');
   const [comments, setComments] = useState<Comment[]>([]);
   const [books, setBooks] = useState<{ id: string; title: string }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,6 +62,7 @@ export default function ModerationPage() {
   const fetchComments = async () => {
     try {
       setLoading(true);
+      setError('');
       const params = new URLSearchParams();
       if (selectedBook !== 'all') params.append('bookId', selectedBook);
       if (selectedStatus !== 'all') params.append('status', selectedStatus);
@@ -75,12 +77,13 @@ export default function ModerationPage() {
       );
 
       const data = await response.json();
+      if (!response.ok || !data.success || !Array.isArray(data.data)) throw new Error('Unable to load comments. Please refresh or sign in again.');
       if (data.success) {
         setComments(data.data || []);
         calculateStats(data.data || []);
       }
     } catch (error) {
-      console.error('Failed to fetch comments:', error);
+      setError(error instanceof Error ? error.message : 'Unable to load comments.');
     } finally {
       setLoading(false);
     }
@@ -183,27 +186,29 @@ export default function ModerationPage() {
           <p className="text-gray-600 mt-1">Review and moderate user comments from chapters</p>
         </div>
 
+        {error && <div role="alert" className="card text-red-700">{error}</div>}
+        <p className="text-sm text-gray-600">Counts below cover the latest 100 comments matching your filters.</p>
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="bg-gradient-to-br from-blue-400 to-blue-600 p-4 rounded-lg text-white">
             <p className="text-sm opacity-90">Total Comments</p>
-            <p className="text-2xl font-bold">{stats.total}</p>
+            <p className="text-2xl font-bold">{error ? '—' : stats.total}</p>
           </div>
           <div className="bg-gradient-to-br from-green-400 to-teal-500 p-4 rounded-lg text-white">
             <p className="text-sm opacity-90">Visible</p>
-            <p className="text-2xl font-bold">{stats.visible}</p>
+            <p className="text-2xl font-bold">{error ? '—' : stats.visible}</p>
           </div>
           <div className="bg-gradient-to-br from-orange-400 to-orange-600 p-4 rounded-lg text-white">
             <p className="text-sm opacity-90">Hidden</p>
-            <p className="text-2xl font-bold">{stats.hidden}</p>
+            <p className="text-2xl font-bold">{error ? '—' : stats.hidden}</p>
           </div>
           <div className="bg-gradient-to-br from-purple-400 to-pink-500 p-4 rounded-lg text-white">
             <p className="text-sm opacity-90">Today's Comments</p>
-            <p className="text-2xl font-bold">{stats.today}</p>
+            <p className="text-2xl font-bold">{error ? '—' : stats.today}</p>
           </div>
           <div className="bg-gradient-to-br from-red-400 to-pink-500 p-4 rounded-lg text-white">
             <p className="text-sm opacity-90">Flagged</p>
-            <p className="text-2xl font-bold">{stats.flagged}</p>
+            <p className="text-2xl font-bold">{error ? '—' : stats.flagged}</p>
           </div>
         </div>
 
@@ -269,7 +274,7 @@ export default function ModerationPage() {
                     : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Visible ({stats.visible})
+                Visible ({error ? '—' : stats.visible})
               </button>
               <button
                 onClick={() => setSelectedTab('flagged')}
@@ -279,7 +284,7 @@ export default function ModerationPage() {
                     : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Flagged ({stats.flagged})
+                Flagged ({error ? '—' : stats.flagged})
               </button>
             </div>
           </div>
@@ -291,7 +296,7 @@ export default function ModerationPage() {
                 <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div>
                 <p className="mt-2 text-gray-600">Loading comments...</p>
               </div>
-            ) : filteredComments.length === 0 ? (
+            ) : error ? <p className="text-red-700">Comments could not be loaded.</p> : filteredComments.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <MessageSquare className="h-12 w-12 text-gray-300 mx-auto mb-3" />
                 <p>No comments found</p>

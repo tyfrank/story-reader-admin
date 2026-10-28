@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { 
   Search, Filter, UserCheck, UserX, 
   Mail, Calendar, Crown, ChevronLeft, ChevronRight
@@ -26,12 +26,18 @@ export default function UsersPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const itemsPerPage = 20
+  const [error, setError] = useState('')
+  const [stats, setStats] = useState({ total: 0, active: 0, premium: 0, authors: 0 })
+  const requestNumber = useRef(0)
 
   useEffect(() => {
     fetchUsers()
   }, [currentPage, searchTerm])
 
   const fetchUsers = async () => {
+    const requestId = ++requestNumber.current
+    setLoading(true)
+    setError('')
     try {
       const token = localStorage.getItem('adminToken')
       const params = new URLSearchParams({
@@ -45,17 +51,17 @@ export default function UsersPage() {
         { headers: { 'Authorization': `Bearer ${token}` } }
       )
       
-      if (response.ok) {
-        const data = await response.json()
-        setUsers(data.data || [])
-        if (data.pagination) {
-          setTotalPages(data.pagination.pages || 1)
-        }
-      }
+      if (!response.ok) throw new Error('Unable to load users. Please retry or sign in again.')
+      const data = await response.json()
+      if (!data.success || !Array.isArray(data.data) || !data.stats) throw new Error('Unexpected user-list response. Please retry.')
+      if (requestId !== requestNumber.current) return
+      setUsers(data.data)
+      setStats(data.stats)
+      setTotalPages(Math.max(1, data.pagination?.pages || 1))
     } catch (error) {
-      console.error('Failed to fetch users:', error)
+      if (requestId === requestNumber.current) setError(error instanceof Error ? error.message : 'Unable to load users.')
     } finally {
-      setLoading(false)
+      if (requestId === requestNumber.current) setLoading(false)
     }
   }
 
@@ -105,7 +111,7 @@ export default function UsersPage() {
     }
   }
 
-  if (loading) {
+  if (loading && users.length === 0 && !error) {
     return (
       <AdminLayout>
         <div className="flex items-center justify-center h-96">
@@ -124,28 +130,30 @@ export default function UsersPage() {
           <p className="text-gray-600 mt-1">Manage all platform users</p>
         </div>
 
+        {error && <div role="alert" className="card text-red-700">{error} <button onClick={fetchUsers} className="underline">Retry</button></div>}
+        {loading && <p role="status">Loading users...</p>}
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-gradient-to-br from-blue-400 to-purple-500 p-4 rounded-lg text-white">
             <p className="text-sm opacity-90">Total Users</p>
-            <p className="text-2xl font-bold">{users.length}</p>
+            <p className="text-2xl font-bold">{error ? '—' : stats.total}</p>
           </div>
           <div className="bg-gradient-to-br from-green-400 to-teal-500 p-4 rounded-lg text-white">
             <p className="text-sm opacity-90">Active Users</p>
             <p className="text-2xl font-bold">
-              {users.filter(u => u.isActive).length}
+              {error ? '—' : stats.active}
             </p>
           </div>
           <div className="bg-gradient-to-br from-yellow-400 to-orange-500 p-4 rounded-lg text-white">
             <p className="text-sm opacity-90">Premium Users</p>
             <p className="text-2xl font-bold">
-              {users.filter(u => u.isPremium).length}
+              {error ? '—' : stats.premium}
             </p>
           </div>
           <div className="bg-gradient-to-br from-purple-400 to-pink-500 p-4 rounded-lg text-white">
             <p className="text-sm opacity-90">Authors</p>
             <p className="text-2xl font-bold">
-              {users.filter(u => u.role === 'AUTHOR').length}
+              {error ? '—' : stats.authors}
             </p>
           </div>
         </div>
@@ -158,7 +166,7 @@ export default function UsersPage() {
               type="text"
               placeholder="Search by email or name..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => { setCurrentPage(1); setSearchTerm(e.target.value) }}
               className="input-field pl-10"
             />
           </div>
@@ -180,7 +188,8 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody>
-                {users.map((user) => (
+                {!error && !loading && users.length === 0 && <tr><td colSpan={7} className="p-6 text-center">No matching users found.</td></tr>}
+                {!error && users.map((user) => (
                   <tr key={user.id} className="border-b hover:bg-gray-50">
                     <td className="px-4 py-3">
                       <div>
